@@ -1,0 +1,184 @@
+import { join } from 'path'
+import { writeYamlFile, generateHeader } from './yaml-utils.js'
+
+export async function generateAreaPackages(inventory, config, packagesDir) {
+  const { areas, entities, scenes, } = inventory
+  const areasDir = join(packagesDir, 'areas')
+  const createdFiles = []
+
+  console.log('\nGenerating area packages...')
+
+  for (const area of areas) {
+    const areaConfig = config.areas?.[area.id] || {}
+    const prefix = extractPrefix(entities, area.id)
+
+    if (!prefix) {
+      console.log(`  ⚠ Skipping ${area.name}: no prefix detected`)
+      continue
+    }
+
+    const { pkg, includeExcludeInfo, } = buildAreaPackage(area, entities, scenes, areaConfig, config, prefix)
+    const fileName = `${prefix}${sanitizeFileName(area.id)}.yaml`
+    const filePath = join(areasDir, fileName)
+    const header = generateHeader(area.name, prefix, includeExcludeInfo)
+
+    await writeYamlFile(filePath, pkg, header)
+    createdFiles.push(`areas/${fileName}`)
+    console.log(`  ✓ ${fileName}`)
+  }
+
+  return createdFiles
+}
+
+function extractPrefix(entities, areaId) {
+  const areaEntities = entities.filter(e => e.area_id === areaId)
+
+  for (const entity of areaEntities) {
+    const name = entity.entity_id.split('.')[1]
+    const underscoreIndex = name?.indexOf('_')
+
+    if (underscoreIndex > 0) {
+      return name.substring(0, underscoreIndex + 1)
+    }
+  }
+
+  return null
+}
+
+function sanitizeFileName(str) {
+  return str.replace(/[^a-z0-9_]/gi, '_').toLowerCase()
+}
+
+function buildAreaPackage(area, entities, scenes, areaConfig, globalConfig, prefix) {
+  const pkg = {}
+
+  // Light group with include/exclude tracking
+  const { lightGroup, included, excluded, } = buildLightGroup(area, entities, areaConfig, globalConfig, prefix)
+
+  if (lightGroup) {
+    pkg.group = { [`${prefix}lights`]: lightGroup, }
+  }
+
+  // Scene selector
+  const areaScenes = getAreaScenes(scenes, prefix)
+  pkg.input_select = {
+    [`${prefix}active_scene`]: buildSceneSelector(area, areaScenes),
+  }
+
+  // Last presence timestamp
+  pkg.input_datetime = {
+    [`${prefix}last_presence`]: {
+      name: `${area.name} Last Presence`,
+      has_date: true,
+      has_time: true,
+    },
+  }
+
+  // Pause automations boolean
+  pkg.input_boolean = {
+    [`${prefix}pause_automations`]: {
+      name: `${area.name} Pause Automations`,
+      icon: 'mdi:pause-circle',
+    },
+  }
+
+  // Vacancy timer
+  const duration = areaConfig.vacancy_timer_duration || globalConfig.default_vacancy_duration || '00:10:00'
+  pkg.timer = {
+    [`${prefix}vacancy`]: {
+      name: `${area.name} Vacancy Timer`,
+      duration,
+    },
+  }
+
+  // People present template sensor
+  pkg.template = [
+    {
+      sensor: [
+        {
+          name: `${area.name} People Present`,
+          unique_id: `${prefix}people_present`,
+          state: buildPeopleTemplate(area.id),
+        },
+      ],
+    },
+  ]
+
+  const includeExcludeInfo = { included, excluded, }
+
+  return { pkg, includeExcludeInfo, }
+}
+
+function buildLightGroup(area, entities, areaConfig, globalConfig, prefix) {
+  const includes = areaConfig.include_in_group || []
+  const includeSet = new Set(includes)
+  const excludeList = areaConfig.exclude_from_group || []
+  const excludeSet = new Set(excludeList)
+
+  // Determine which labels to exclude (area overrides global, no hardcoded defaults)
+  const globalExcludedLabels = globalConfig.excluded_labels || []
+  const globalIncludedLabels = new Set(globalConfig.included_labels || [])
+  const areaExcludedLabels = areaConfig.excluded_labels
+  const areaIncludedLabels = new Set(areaConfig.included_labels || [])
+
+  // Use area labels if defined, otherwise global
+  const excludedLabels = new Set(areaExcludedLabels ?? globalExcludedLabels)
+  const includedLabels = new Set([...globalIncludedLabels, ...areaIncludedLabels])
+
+  // Get lights from this area (domain: light only)
+  const areaLights = entities
+    .filter(e => e.area_id === area.id && e.domain === 'light')
+    .filter(e => {
+      const entityLabels = e.labels || []
+
+      // Check if entity has an included label (overrides exclusion)
+      const hasIncludedLabel = entityLabels.some(label => includedLabels.has(label))
+      if (hasIncludedLabel) return true
+
+      // Check if entity has an excluded label
+      const hasExcludedLabel = entityLabels.some(label => excludedLabels.has(label))
+
+      // Include if: no excluded label OR explicitly included by entity ID
+      return !hasExcludedLabel || includeSet.has(e.entity_id)
+    })
+    .map(e => e.entity_id)
+    .filter(id => !excludeSet.has(id))
+
+  // Combine with explicit includes (for switches, etc.)
+  const allLights = [...new Set([...areaLights, ...includes])]
+
+  if (allLights.length === 0) {
+    return { lightGroup: null, included: [], excluded: [], }
+  }
+
+  const lightGroup = {
+    name: `${area.name} Lights`,
+    entities: allLights.sort(),
+  }
+
+  return {
+    lightGroup,
+    included: includes,
+    excluded: excludeList,
+  }
+}
+
+function getAreaScenes(scenes, prefix) {
+  return scenes
+    .filter(s => s.entity_id.includes(`.${prefix}`))
+    .map(s => s.entity_id)
+}
+
+function buildSceneSelector(area, areaScenes) {
+  const options = ['none', ...areaScenes]
+
+  return {
+    name: `${area.name} Active Scene`,
+    options,
+    initial: 'none',
+  }
+}
+
+function buildPeopleTemplate(areaId) {
+  return `{{ states.person | selectattr('state', 'eq', '${areaId}') | map(attribute='name') | list | join(', ') or 'none' }}`
+}

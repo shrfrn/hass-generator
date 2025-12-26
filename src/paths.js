@@ -1,0 +1,36 @@
+// @ts-check
+import { join } from 'path'
+
+/**
+ * Get path relative to current working directory
+ * @param {...string} segments Path segments
+ * @returns {string}
+ */
+export function cwdPath(...segments) {
+  return join(process.cwd(), ...segments)
+}
+
+// Standard paths relative to CWD
+export const paths = {
+  // Config files
+  generatorConfig: () => cwdPath('generator.config.js'),
+  dashboardConfig: () => cwdPath('dashboard.config.js'),
+  usersConfig: () => cwdPath('users.js'),
+  envFile: () => cwdPath('.env'),
+
+  // Inventory folder
+  inventory: () => cwdPath('inventory'),
+  hassData: () => cwdPath('inventory', 'hass-data.json'),
+  entities: () => cwdPath('inventory', 'entities.js'),
+  typesDir: () => cwdPath('inventory', 'types'),
+  hassTypes: () => cwdPath('inventory', 'types', 'hass.d.ts'),
+  configTypes: () => cwdPath('inventory', 'types', 'config.d.ts'),
+
+  // Output folders
+  packages: () => cwdPath('packages'),
+  packagesAreas: () => cwdPath('packages', 'areas'),
+  packagesLabels: () => cwdPath('packages', 'labels'),
+  lovelace: () => cwdPath('lovelace'),
+  generatedDashboard: () => cwdPath('lovelace', 'generated.yaml'),
+}
+

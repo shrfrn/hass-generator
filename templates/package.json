@@ -1,0 +1,16 @@
+{
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "inventory": "hass-gen inventory",
+    "generate": "hass-gen generate",
+    "generate:yaml": "hass-gen generate --yaml-only",
+    "generate:dashboard": "hass-gen generate --dashboard-only",
+    "ship": "hass-gen ship",
+    "ship:full": "hass-gen ship --full"
+  },
+  "devDependencies": {
+    "hass-generator": "github:shrfrn/hass-generator#v0.1.0"
+  }
+}
+

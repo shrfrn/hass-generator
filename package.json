@@ -1,0 +1,36 @@
+{
+  "name": "hass-generator",
+  "version": "0.1.0",
+  "description": "CLI tool for generating Home Assistant YAML configs and dashboards",
+  "type": "module",
+  "bin": {
+    "hass-gen": "./bin/hass-gen.js"
+  },
+  "files": [
+    "bin/",
+    "src/",
+    "templates/"
+  ],
+  "scripts": {
+    "test": "echo \"No tests yet\" && exit 0"
+  },
+  "keywords": [
+    "home-assistant",
+    "hass",
+    "yaml",
+    "generator",
+    "cli"
+  ],
+  "author": "",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "commander": "^12.0.0",
+    "dotenv": "^16.3.1",
+    "yaml": "^2.3.4",
+    "ws": "^8.16.0"
+  }
+}
+
