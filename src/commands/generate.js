@@ -43,6 +43,7 @@ export async function generate(options = {}) {
     console.warn('   Add "schemaVersion: 1" to your config for future compatibility\n')
   }
 
+  /** @type {{ yaml: string[], dashboards: string[] }} */
   const results = { yaml: [], dashboards: [] }
 
   // Generate YAML packages
