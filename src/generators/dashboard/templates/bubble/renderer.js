@@ -1,7 +1,70 @@
-// Dashboard card builders for Bubble Card-based Lovelace dashboard
+// Bubble Card template renderer
+// Generates Lovelace dashboard using custom:bubble-card components
 
-export function buildPreviewCard(area, prefix, areaData, defaultSceneSuffix) {
-  const { lightGroup, acEntity, fanEntity, } = areaData
+/**
+ * Render a complete dashboard from area data
+ * @param {Array} areaDataList - Array of prepared area data
+ * @param {object} config - Dashboard config
+ * @returns {object} Lovelace dashboard YAML structure
+ */
+export function render(areaDataList, config) {
+  const dashboardName = config.dashboard_name || 'Home'
+  const defaultSceneSuffix = config.default_scene_suffix || 'standard'
+
+  const previewCards = [
+    { type: 'heading', heading: 'Areas' },
+  ]
+  const popupCards = []
+
+  for (const areaData of areaDataList) {
+    const { area, prefix, visibleToUsers } = areaData
+
+    const previewCard = buildPreviewCard(area, prefix, areaData, defaultSceneSuffix)
+    previewCards.push(wrapWithUserCondition(previewCard, visibleToUsers))
+
+    const detailsPopup = buildDetailsPopup(area, prefix, areaData, defaultSceneSuffix)
+    popupCards.push(wrapWithUserCondition(detailsPopup, visibleToUsers))
+
+    const userNote = visibleToUsers ? ` (${visibleToUsers.length} users)` : ''
+    console.log(`  ✓ ${area.name}${userNote}`)
+  }
+
+  const cards = [...previewCards, ...popupCards]
+
+  return {
+    views: [
+      {
+        title: dashboardName,
+        sections: [
+          {
+            type: 'grid',
+            cards,
+          },
+        ],
+      },
+    ],
+  }
+}
+
+function wrapWithUserCondition(card, visibleToUsers) {
+  if (!visibleToUsers || visibleToUsers.length === 0) {
+    return card
+  }
+
+  return {
+    type: 'conditional',
+    conditions: [
+      {
+        condition: 'user',
+        users: visibleToUsers,
+      },
+    ],
+    card,
+  }
+}
+
+function buildPreviewCard(area, prefix, areaData, defaultSceneSuffix) {
+  const { lightGroup, acEntity, fanEntity } = areaData
   const popupHash = `#${prefix}details`
   const defaultScene = `scene.${prefix}${defaultSceneSuffix}`
 
@@ -15,10 +78,10 @@ export function buildPreviewCard(area, prefix, areaData, defaultSceneSuffix) {
     tap_action: {
       action: 'perform-action',
       perform_action: 'scene.turn_on',
-      target: { entity_id: defaultScene, },
+      target: { entity_id: defaultScene },
       data: {},
     },
-    hold_action: { action: 'toggle', },
+    hold_action: { action: 'toggle' },
     button_action: {
       tap_action: {
         action: 'navigate',
@@ -27,21 +90,20 @@ export function buildPreviewCard(area, prefix, areaData, defaultSceneSuffix) {
     },
   }
 
-  // Add sub-buttons for AC and fan if they exist
   const subButtons = []
 
   if (acEntity) {
     subButtons.push({
       entity: acEntity,
       icon: 'mdi:snowflake',
-      tap_action: { action: 'toggle', },
+      tap_action: { action: 'toggle' },
     })
   }
 
   if (fanEntity) {
     subButtons.push({
       entity: fanEntity,
-      tap_action: { action: 'toggle', },
+      tap_action: { action: 'toggle' },
     })
   }
 
@@ -52,14 +114,13 @@ export function buildPreviewCard(area, prefix, areaData, defaultSceneSuffix) {
   return card
 }
 
-export function buildDetailsPopup(area, prefix, areaData, defaultSceneSuffix) {
-  const { lightGroup, scenes, lights, acEntity, fanEntity, otherEntities, } = areaData
+function buildDetailsPopup(area, prefix, areaData, defaultSceneSuffix) {
+  const { lightGroup, scenes, lights, acEntity, fanEntity, otherEntities } = areaData
   const popupHash = `#${prefix}details`
   const defaultScene = `scene.${prefix}${defaultSceneSuffix}`
 
   const cards = []
 
-  // Header popup card
   cards.push({
     type: 'custom:bubble-card',
     card_type: 'pop-up',
@@ -71,34 +132,30 @@ export function buildDetailsPopup(area, prefix, areaData, defaultSceneSuffix) {
     tap_action: {
       action: 'perform-action',
       perform_action: 'scene.turn_on',
-      target: { entity_id: defaultScene, },
+      target: { entity_id: defaultScene },
       data: {},
     },
-    hold_action: { action: 'toggle', },
+    hold_action: { action: 'toggle' },
     button_action: {
-      tap_action: { action: 'none', },
+      tap_action: { action: 'none' },
     },
   })
 
-  // Scenes section
   if (scenes.length > 0) {
     cards.push(buildSeparator('Scenes'))
     cards.push(buildSceneGrid(scenes))
   }
 
-  // Lights section
   if (lights.length > 0) {
     cards.push(buildSeparator('Lights'))
     cards.push(buildLightsGrid(lights))
   }
 
-  // Climate section
   if (acEntity || fanEntity) {
     cards.push(buildSeparator('Climate'))
     cards.push(buildClimateCard(acEntity, fanEntity))
   }
 
-  // Other section
   if (otherEntities.length > 0) {
     cards.push(buildSeparator('Other'))
     cards.push(buildOtherGrid(otherEntities))
@@ -125,7 +182,7 @@ function buildSceneGrid(scenes) {
     button_type: 'switch',
     entity: scene.entity_id,
     name: formatEntityName(scene.entity_id, scene.name),
-    tap_action: { action: 'toggle', },
+    tap_action: { action: 'toggle' },
   }))
 
   return {
@@ -143,7 +200,7 @@ function buildLightsGrid(lights) {
     button_type: 'switch',
     entity: light.entity_id,
     name: formatEntityName(light.entity_id, light.name),
-    tap_action: { action: 'toggle', },
+    tap_action: { action: 'toggle' },
   }))
 
   return {
@@ -163,7 +220,7 @@ function buildClimateCard(acEntity, fanEntity) {
     min_temp: 16,
     max_temp: 30,
     step: 1,
-    tap_action: { action: 'toggle', },
+    tap_action: { action: 'toggle' },
   }
 
   const subButtons = []
@@ -171,7 +228,7 @@ function buildClimateCard(acEntity, fanEntity) {
   if (fanEntity) {
     subButtons.push({
       entity: fanEntity,
-      tap_action: { action: 'toggle', },
+      tap_action: { action: 'toggle' },
     })
   }
 
@@ -198,7 +255,7 @@ function buildOtherGrid(entities) {
     button_type: 'switch',
     entity: entity.entity_id,
     name: formatEntityName(entity.entity_id, entity.name),
-    tap_action: { action: 'toggle', },
+    tap_action: { action: 'toggle' },
   }))
 
   return {
@@ -209,7 +266,6 @@ function buildOtherGrid(entities) {
   }
 }
 
-// Known scene suffixes with their display names
 const SCENE_DISPLAY_NAMES = {
   standard: 'Standard',
   minimal: 'Minimal',
@@ -219,8 +275,6 @@ function formatEntityName(entityId, name) {
   const parts = entityId.split('.')
   const id = parts[1] || entityId
 
-  // Check for known scene suffixes first (e.g., lr_standard -> Standard)
-  // This applies even if name exists (since name is often just the entity_id suffix)
   if (parts[0] === 'scene') {
     for (const [suffix, displayName] of Object.entries(SCENE_DISPLAY_NAMES)) {
       if (id.endsWith(`_${suffix}`)) {
@@ -229,13 +283,10 @@ function formatEntityName(entityId, name) {
     }
   }
 
-  // Use custom name if it's different from entity_id suffix
   if (name && name !== id) return name
 
-  // Remove prefix (e.g., lr_lt_wall_e -> wall_e)
   const withoutPrefix = id.replace(/^[a-z]+_/, '')
 
-  // Convert underscores to spaces and capitalize
   return withoutPrefix
     .split('_')
     .map(word => word.charAt(0).toUpperCase() + word.slice(1))

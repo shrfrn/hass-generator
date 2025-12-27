@@ -3,9 +3,10 @@
 // DASHBOARD GENERATOR CONFIG
 // ============================================================================
 // Purpose: Configures the Lovelace dashboard generator (hass-gen generate)
-// Outputs: lovelace/generated.yaml (Bubble Card-based dashboard)
 //
 // Key options:
+//   template         - Dashboard template ('bubble', 'mushroom')
+//   output           - Output file path relative to project root
 //   pinned_areas     - Areas shown first on the dashboard (in order)
 //   excluded_areas   - Areas hidden from the dashboard entirely
 //   excluded_lights  - Lights moved from "Lights" section to "Other" section
@@ -15,12 +16,18 @@
 // This file is never overwritten by the generator.
 // ============================================================================
 
-// import { PARENTS } from './users.js'  // Uncomment to use user groups
+// import { PARENTS } from '../users.js'  // Uncomment to use user groups
 
-/** @type {import('./inventory/types/config.d.ts').DashboardConfig} */
+/** @type {import('../inventory/types/config.d.ts').DashboardConfig} */
 const config = {
   // Schema version - do not change manually
   schemaVersion: 1,
+
+  // Dashboard template to use
+  template: 'bubble',
+
+  // Output file path (relative to project root)
+  output: 'lovelace/main.yaml',
 
   // Dashboard view title
   dashboard_name: 'Home',

@@ -14,9 +14,12 @@ export function cwdPath(...segments) {
 export const paths = {
   // Config files
   generatorConfig: () => cwdPath('generator.config.js'),
-  dashboardConfig: () => cwdPath('dashboard.config.js'),
   usersConfig: () => cwdPath('users.js'),
   envFile: () => cwdPath('.env'),
+
+  // Dashboards folder
+  dashboards: () => cwdPath('dashboards'),
+  dashboardConfig: (name) => cwdPath('dashboards', `${name}.config.js`),
 
   // Inventory folder
   inventory: () => cwdPath('inventory'),

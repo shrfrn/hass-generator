@@ -1,14 +1,17 @@
 // @ts-check
-import { existsSync, mkdirSync, readFileSync } from 'fs'
+import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'fs'
+import { join, basename } from 'path'
+import YAML from 'yaml'
 import { paths } from '../paths.js'
 import { generateAreaPackages } from '../generators/area-package.js'
 import { generateLabelPackages } from '../generators/label-package.js'
+import { generateDashboard } from '../generators/dashboard/index.js'
 
 /**
- * @param {{ dryRun?: boolean, force?: boolean, yamlOnly?: boolean, dashboardOnly?: boolean }} options
+ * @param {{ dryRun?: boolean, force?: boolean, yamlOnly?: boolean, dashboardOnly?: boolean, dashboard?: string }} options
  */
 export async function generate(options = {}) {
-  const { dryRun, force, yamlOnly, dashboardOnly } = options
+  const { dryRun, force, yamlOnly, dashboardOnly, dashboard } = options
 
   // Check for required files
   if (!existsSync(paths.generatorConfig())) {
@@ -30,7 +33,7 @@ export async function generate(options = {}) {
   // Load inventory data
   const inventory = JSON.parse(readFileSync(paths.hassData(), 'utf-8'))
 
-  // Load config (dynamic import for ESM)
+  // Load generator config (for YAML packages)
   const configModule = await import(paths.generatorConfig())
   const config = configModule.default
 
@@ -40,59 +43,103 @@ export async function generate(options = {}) {
     console.warn('   Add "schemaVersion: 1" to your config for future compatibility\n')
   }
 
-  const results = { yaml: [], dashboard: null, }
+  const results = { yaml: [], dashboards: [] }
 
   // Generate YAML packages
   if (!dashboardOnly) {
     console.log('\n📄 Generating YAML packages...')
 
-    // Ensure directories exist
     ensureDir(paths.packages())
     ensureDir(paths.packagesAreas())
     ensureDir(paths.packagesLabels())
 
-    // Generate area packages
     const areaFiles = await generateAreaPackages(inventory, config, paths.packages())
     results.yaml.push(...areaFiles)
 
-    // Generate label packages
     const labelFiles = await generateLabelPackages(inventory, paths.packages())
     results.yaml.push(...labelFiles)
 
     console.log(`\n   Generated ${results.yaml.length} YAML files`)
   }
 
-  // Generate dashboard
+  // Generate dashboards
   if (!yamlOnly) {
-    console.log('\n🎨 Generating dashboard...')
+    const dashboardConfigs = await discoverDashboards(dashboard)
 
-    // Load dashboard config
-    let dashboardConfig = {}
-
-    if (existsSync(paths.dashboardConfig())) {
-      const dashboardModule = await import(paths.dashboardConfig())
-      dashboardConfig = dashboardModule.default
+    if (dashboardConfigs.length === 0) {
+      console.log('\n⚠️  No dashboard configs found in dashboards/ folder')
+      console.log('   Create dashboards/main.config.js to generate a dashboard')
     } else {
-      console.log('   (using default dashboard settings)')
+      ensureDir(paths.lovelace())
+
+      for (const { name, configPath } of dashboardConfigs) {
+        const dashboardModule = await import(configPath)
+        const dashboardConfig = dashboardModule.default
+
+        if (!dashboardConfig.template) {
+          console.error(`\n❌ Dashboard '${name}' missing 'template' field`)
+          continue
+        }
+
+        const dashboardYaml = await generateDashboard(inventory, dashboardConfig)
+
+        // Determine output path
+        const outputPath = dashboardConfig.output
+          ? join(process.cwd(), dashboardConfig.output)
+          : join(paths.lovelace(), `${name}.yaml`)
+
+        if (!dryRun) {
+          ensureDir(join(outputPath, '..'))
+          writeFileSync(outputPath, YAML.stringify(dashboardYaml))
+          console.log(`   📝 Written to ${dashboardConfig.output || `lovelace/${name}.yaml`}`)
+        }
+
+        results.dashboards.push(name)
+      }
     }
-
-    // Ensure directory exists
-    ensureDir(paths.lovelace())
-
-    // TODO: Implement dashboard generation
-    // const { generateDashboard } = await import('../generators/dashboard-generator.js')
-    // await generateDashboard(inventory, dashboardConfig, paths.lovelace())
-
-    console.log('   ⚠️  Dashboard generation pending (use existing workflow for now)')
   }
 
-  // TODO: Implement diff mode
   if (dryRun) {
     console.log('\n📋 Diff preview:')
     console.log('   (diff implementation pending)')
   }
 
   console.log('\n✨ Generation complete!')
+}
+
+/**
+ * Discover dashboard configs in dashboards/ folder
+ * @param {string} [filterName] - Optional dashboard name to filter
+ * @returns {Promise<Array<{ name: string, configPath: string }>>}
+ */
+async function discoverDashboards(filterName) {
+  const dashboardsDir = paths.dashboards()
+
+  if (!existsSync(dashboardsDir)) {
+    return []
+  }
+
+  const files = readdirSync(dashboardsDir)
+  const configs = []
+
+  for (const file of files) {
+    if (!file.endsWith('.config.js')) continue
+
+    const name = file.replace('.config.js', '')
+
+    // Filter if specific dashboard requested
+    if (filterName) {
+      const requestedNames = filterName.split(',').map(n => n.trim())
+      if (!requestedNames.includes(name)) continue
+    }
+
+    configs.push({
+      name,
+      configPath: join(dashboardsDir, file),
+    })
+  }
+
+  return configs
 }
 
 function ensureDir(dir) {

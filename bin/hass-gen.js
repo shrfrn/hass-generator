@@ -36,11 +36,12 @@ program
 
 program
   .command('generate')
-  .description('Generate YAML packages and dashboard')
+  .description('Generate YAML packages and dashboards')
   .option('--dry-run', 'Show diff without writing files')
   .option('--force', 'Skip diff confirmation prompts')
   .option('--yaml-only', 'Generate only YAML packages')
-  .option('--dashboard-only', 'Generate only dashboard')
+  .option('--dashboard-only', 'Generate only dashboards')
+  .option('-d, --dashboard <names>', 'Generate specific dashboard(s), comma-separated')
   .action(async (options) => {
     const { generate } = await import('../src/commands/generate.js')
     await generate(options)

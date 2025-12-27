@@ -202,9 +202,18 @@ export interface DashboardAreaConfig {
   visible_to_users?: string[]
 }
 
+/** Available dashboard templates */
+export type DashboardTemplate = 'bubble' | 'mushroom'
+
 export interface DashboardConfig {
   /** Schema version - do not change manually */
   schemaVersion: number
+
+  /** Dashboard template to use (e.g., 'bubble', 'mushroom') */
+  template: DashboardTemplate
+
+  /** Output file path (relative to project root) */
+  output: string
 
   /** Dashboard view title */
   dashboard_name?: string
