@@ -19,11 +19,11 @@ program
   .version(pkg.version)
 
 program
-  .command('init')
+  .command('init [destination]')
   .description('Initialize a new HASS config project with starter files')
-  .action(async () => {
+  .action(async (destination) => {
     const { init } = await import('../src/commands/init.js')
-    await init()
+    await init(destination)
   })
 
 program
