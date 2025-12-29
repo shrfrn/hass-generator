@@ -75,6 +75,7 @@ function buildPreviewCard(area, prefix, areaData, defaultSceneSuffix) {
     entity: lightGroup,
     name: area.name,
     icon: area.icon || 'mdi:home',
+    scrolling_effect: true,
     tap_action: {
       action: 'perform-action',
       perform_action: 'scene.turn_on',
@@ -141,9 +142,12 @@ function buildDetailsPopup(area, prefix, areaData, defaultSceneSuffix) {
     },
   })
 
-  if (scenes.length > 0) {
+  const defaultSceneId = `scene.${prefix}${defaultSceneSuffix}`
+  const filteredScenes = scenes.filter(s => s.entity_id !== defaultSceneId)
+
+  if (filteredScenes.length > 0) {
     cards.push(buildSeparator('Scenes'))
-    cards.push(buildSceneGrid(scenes))
+    cards.push(buildSceneGrid(filteredScenes))
   }
 
   if (lights.length > 0) {
@@ -182,6 +186,7 @@ function buildSceneGrid(scenes) {
     button_type: 'switch',
     entity: scene.entity_id,
     name: formatEntityName(scene.entity_id, scene.name),
+    scrolling_effect: true,
     tap_action: { action: 'toggle' },
   }))
 
@@ -200,6 +205,7 @@ function buildLightsGrid(lights) {
     button_type: 'switch',
     entity: light.entity_id,
     name: formatEntityName(light.entity_id, light.name),
+    scrolling_effect: true,
     tap_action: { action: 'toggle' },
   }))
 
@@ -255,6 +261,7 @@ function buildOtherGrid(entities) {
     button_type: 'switch',
     entity: entity.entity_id,
     name: formatEntityName(entity.entity_id, entity.name),
+    scrolling_effect: true,
     tap_action: { action: 'toggle' },
   }))
 
