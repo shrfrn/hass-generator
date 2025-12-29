@@ -92,6 +92,7 @@ The generation workflow:
 |--------|---------|-------------|
 | `scripts/rebuild.sh` | Dev | Full pipeline: inventory → generate → ship |
 | `scripts/ship.sh` | Dev | Push to GitHub, trigger prod deploy |
+| `scripts/ship.sh --force` | Dev | Deploy already-pushed commits (skip push) |
 | `scripts/deploy.sh` | Prod | Pull from GitHub, merge, restart HA |
 
 ---
@@ -121,6 +122,16 @@ No need to re-fetch inventory if HA entities haven't changed.
 npx hass-gen generate --dashboard-only
 ./scripts/ship.sh
 ```
+
+### Re-deploy already-pushed commits
+
+If commits were pushed but not deployed (e.g., prod had issues), use `--force`:
+
+```bash
+./scripts/ship.sh --force
+```
+
+This skips the "no new commits" check and triggers prod deploy directly.
 
 ---
 

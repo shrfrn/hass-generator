@@ -26,6 +26,11 @@ NC='\033[0m'
 
 SPINNER='⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏'
 
+FORCE=false
+if [ "$1" = "--force" ] || [ "$1" = "-f" ]; then
+    FORCE=true
+fi
+
 BRANCH=$(git branch --show-current)
 
 if [ "$BRANCH" = "main" ]; then
@@ -34,15 +39,21 @@ if [ "$BRANCH" = "main" ]; then
 fi
 
 UNPUSHED=$(git log origin/$BRANCH..$BRANCH --oneline 2>/dev/null | wc -l | tr -d ' ')
-if [ "$UNPUSHED" -eq 0 ]; then
+
+if [ "$UNPUSHED" -eq 0 ] && [ "$FORCE" = false ]; then
     echo -e "${YELLOW}No new commits to deploy on $BRANCH${NC}"
-    echo -e "${DIM}Make changes and commit before deploying.${NC}"
+    echo -e "${DIM}Use --force to deploy already-pushed commits.${NC}"
     exit 0
 fi
 
-echo ""
-echo -e "${WHITE}📤 Pushing $BRANCH to origin...${NC}"
-git push origin "$BRANCH" 2>&1 | sed "s/^/   /"
+if [ "$UNPUSHED" -gt 0 ]; then
+    echo ""
+    echo -e "${WHITE}📤 Pushing $BRANCH to origin...${NC}"
+    git push origin "$BRANCH" 2>&1 | sed "s/^/   /"
+elif [ "$FORCE" = true ]; then
+    echo ""
+    echo -e "${WHITE}📤 Force deploy (no new commits to push)${NC}"
+fi
 
 echo ""
 echo -e "${CYAN}🚀 Deploying to prod...${NC}"
