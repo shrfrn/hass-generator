@@ -198,6 +198,12 @@ export interface DashboardAreaConfig {
   /** Entities to add to the Lights section (display only) */
   included_lights?: EntityId[]
 
+  /** Scenes from other areas to include in this area's detailed view */
+  included_scenes?: EntityId[]
+
+  /** Scenes to exclude from this area's detailed view (show in another area instead) */
+  excluded_scenes?: EntityId[]
+
   /** User IDs that can see this area */
   visible_to_users?: string[]
 }

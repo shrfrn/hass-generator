@@ -11,6 +11,8 @@
 //   excluded_areas   - Areas hidden from the dashboard entirely
 //   excluded_lights  - Lights moved from "Lights" section to "Other" section
 //   included_lights  - Entities added to "Lights" section (display only)
+//   included_scenes  - Scenes from other areas to show in this area's view
+//   excluded_scenes  - Scenes to hide from this area (show elsewhere instead)
 //   visible_to_users - Restrict area visibility to specific HA user IDs
 //
 // This file is never overwritten by the generator.
@@ -48,7 +50,9 @@ const config = {
     // living_room: {
     //   excluded_lights: ['light.lr_ceiling'],
     //   included_lights: ['switch.lr_outlet'],
-    //   visible_to_users: PARENTS,  // Only show to parents
+    //   included_scenes: ['scene.kitchen_cooking'],  // Show kitchen scene here too
+    //   excluded_scenes: ['scene.lr_movie'],         // Show this scene elsewhere
+    //   visible_to_users: PARENTS,
     // },
   },
 }

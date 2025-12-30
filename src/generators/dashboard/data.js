@@ -27,7 +27,7 @@ export function prepareAllAreaData(inventory, config) {
     }
 
     const areaConfig = config.areas?.[area.id] || {}
-    const areaData = buildAreaData(area, prefix, entityMap, sceneMap, areaConfig)
+    const areaData = buildAreaData(area, prefix, entityMap, sceneMap, areaConfig, scenes)
 
     if (!areaData.lightGroup) {
       console.log(`  ⚠ Skipping ${area.name}: no light group`)
@@ -120,7 +120,7 @@ export function extractPrefix(entities, areaId) {
   return null
 }
 
-function buildAreaData(area, prefix, entityMap, sceneMap, areaConfig) {
+function buildAreaData(area, prefix, entityMap, sceneMap, areaConfig, allScenes) {
   const areaEntities = entityMap.get(area.id) || []
   const areaScenes = sceneMap.get(prefix) || []
 
@@ -132,12 +132,13 @@ function buildAreaData(area, prefix, entityMap, sceneMap, areaConfig) {
   const fanEntity = findFanEntity(areaEntities)
   const lights = buildLightsList(areaEntities, excludedLights, includedLights)
   const otherEntities = buildOtherList(areaEntities, excludedLights, lights, acEntity, fanEntity)
+  const scenes = buildScenesList(areaScenes, areaConfig, allScenes)
 
   return {
     lightGroup,
     acEntity,
     fanEntity,
-    scenes: areaScenes,
+    scenes,
     lights,
     otherEntities,
   }
@@ -211,5 +212,28 @@ function buildOtherList(entities, excludedLights, lightsInSection, acEntity, fan
 
     return true
   })
+}
+
+function buildScenesList(areaScenes, areaConfig, allScenes) {
+  const excludedScenes = new Set(areaConfig.excluded_scenes || [])
+  const includedScenes = areaConfig.included_scenes || []
+
+  const filtered = areaScenes.filter(s => !excludedScenes.has(s.entity_id))
+
+  const includedSet = new Set(filtered.map(s => s.entity_id))
+
+  for (const sceneId of includedScenes) {
+    if (includedSet.has(sceneId)) continue
+
+    const scene = allScenes.find(s => s.entity_id === sceneId)
+
+    if (scene) {
+      filtered.push(scene)
+    } else {
+      filtered.push({ entity_id: sceneId, name: null })
+    }
+  }
+
+  return filtered
 }
 
