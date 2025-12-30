@@ -8,12 +8,13 @@
  * @returns {Array} Array of areaData objects
  */
 export function prepareAllAreaData(inventory, config) {
-  const { areas, entities, scenes } = inventory
+  const { areas, entities } = inventory
   const excludedAreas = new Set(config.excluded_areas || [])
   const pinnedAreas = config.pinned_areas || []
 
   const entityMap = buildEntityMap(entities)
-  const sceneMap = buildSceneMap(scenes)
+  const allScenes = entities.filter(e => e.domain === 'scene')
+  const sceneMap = buildSceneMapByArea(allScenes)
 
   const sortedAreas = sortAreas(areas, pinnedAreas, excludedAreas)
   const result = []
@@ -27,7 +28,7 @@ export function prepareAllAreaData(inventory, config) {
     }
 
     const areaConfig = config.areas?.[area.id] || {}
-    const areaData = buildAreaData(area, prefix, entityMap, sceneMap, areaConfig, scenes)
+    const areaData = buildAreaData(area, prefix, entityMap, sceneMap, areaConfig, allScenes)
 
     if (!areaData.lightGroup) {
       console.log(`  ⚠ Skipping ${area.name}: no light group`)
@@ -62,23 +63,18 @@ function buildEntityMap(entities) {
   return map
 }
 
-function buildSceneMap(scenes) {
+function buildSceneMapByArea(scenes) {
   const map = new Map()
 
   for (const scene of scenes) {
-    const parts = scene.entity_id.split('.')
-    const name = parts[1] || ''
-    const underscoreIdx = name.indexOf('_')
+    const areaId = scene.area_id
+    if (!areaId) continue
 
-    if (underscoreIdx > 0) {
-      const prefix = name.substring(0, underscoreIdx + 1)
-
-      if (!map.has(prefix)) {
-        map.set(prefix, [])
-      }
-
-      map.get(prefix).push(scene)
+    if (!map.has(areaId)) {
+      map.set(areaId, [])
     }
+
+    map.get(areaId).push(scene)
   }
 
   return map
@@ -122,7 +118,7 @@ export function extractPrefix(entities, areaId) {
 
 function buildAreaData(area, prefix, entityMap, sceneMap, areaConfig, allScenes) {
   const areaEntities = entityMap.get(area.id) || []
-  const areaScenes = sceneMap.get(prefix) || []
+  const areaScenes = sceneMap.get(area.id) || []
 
   const excludedLights = new Set(areaConfig.excluded_lights || [])
   const includedLights = areaConfig.included_lights || []
