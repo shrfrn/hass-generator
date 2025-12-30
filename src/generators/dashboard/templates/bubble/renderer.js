@@ -110,6 +110,12 @@ function buildPreviewCard(area, prefix, areaData, defaultSceneSuffix) {
 
   if (subButtons.length > 0) {
     card.sub_button = subButtons
+    card.styles = `
+      .bubble-sub-button-container {
+        right: unset;
+        inset-inline-end: 8px;
+      }
+    `
   }
 
   return card
@@ -249,6 +255,12 @@ function buildClimateCard(acEntity, fanEntity) {
 
   if (subButtons.length > 0) {
     card.sub_button = subButtons
+    card.styles = `
+      .bubble-sub-button-container {
+        right: unset;
+        inset-inline-end: 8px;
+      }
+    `
   }
 
   return card
