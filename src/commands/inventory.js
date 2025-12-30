@@ -5,6 +5,7 @@ import { paths } from '../paths.js'
 import { connect, disconnect } from '../websocket.js'
 import { fetchAllData } from '../fetchers.js'
 import { transformData } from '../transform.js'
+import { checkNamingConsistency, printNamingReport, writeNamingReport } from '../validation/naming-check.js'
 
 export async function inventory() {
   // Load .env from current directory
@@ -50,6 +51,11 @@ export async function inventory() {
     writeEntitiesJs(data)
     writeHassTypes(data)
     writeConfigTypes()
+
+    console.log('\n🔍 Checking naming consistency...')
+    const namingResults = checkNamingConsistency(data)
+    printNamingReport(namingResults)
+    writeNamingReport(namingResults, paths.namingViolations())
 
     disconnect()
 

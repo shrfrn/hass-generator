@@ -25,6 +25,7 @@ export const paths = {
   inventory: () => cwdPath('inventory'),
   hassData: () => cwdPath('inventory', 'hass-data.json'),
   entities: () => cwdPath('inventory', 'entities.js'),
+  namingViolations: () => cwdPath('inventory', 'naming-violations.json'),
   typesDir: () => cwdPath('inventory', 'types'),
   hassTypes: () => cwdPath('inventory', 'types', 'hass.d.ts'),
   configTypes: () => cwdPath('inventory', 'types', 'config.d.ts'),
