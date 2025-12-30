@@ -7,7 +7,8 @@ export async function generateHomePackage(inventory, packagesDir) {
   const { entities } = inventory
   const persons = entities.filter(e => e.domain === 'person')
 
-  const binarySensors = persons.map(person => {
+  // Per-person sensors
+  const personSensors = persons.map(person => {
     const firstName = extractFirstName(person.name)
     const sensorId = `${firstName.toLowerCase()}_home`
 
@@ -19,9 +20,81 @@ export async function generateHomePackage(inventory, packagesDir) {
     }
   })
 
+  // Aggregate sensors
+  const personIds = persons.map(p => `'${p.entity_id}'`).join(', ')
+
+  const aggregateSensors = [
+    {
+      name: 'Anyone Home',
+      unique_id: 'anyone_home',
+      state: `{{ [${personIds}] | select('is_state', 'home') | list | count > 0 }}`,
+      device_class: 'presence',
+    },
+    {
+      name: 'Everyone Home',
+      unique_id: 'everyone_home',
+      state: `{{ [${personIds}] | reject('is_state', 'home') | list | count == 0 }}`,
+      device_class: 'presence',
+    },
+  ]
+
+  // Count sensor
+  const countSensor = {
+    name: 'People Home Count',
+    unique_id: 'people_home_count',
+    state: `{{ [${personIds}] | select('is_state', 'home') | list | count }}`,
+    icon: 'mdi:account-group',
+  }
+
+  // Trigger-based timestamp sensors
+  const arrivedHomeTrigger = {
+    trigger: [
+      {
+        platform: 'state',
+        entity_id: 'binary_sensor.anyone_home',
+        from: 'off',
+        to: 'on',
+      },
+    ],
+    sensor: [
+      {
+        name: 'Home Became Occupied',
+        unique_id: 'home_became_occupied',
+        state: '{{ now().isoformat() }}',
+        device_class: 'timestamp',
+        icon: 'mdi:home-account',
+      },
+    ],
+  }
+
+  const leftHomeTrigger = {
+    trigger: [
+      {
+        platform: 'state',
+        entity_id: 'binary_sensor.anyone_home',
+        from: 'on',
+        to: 'off',
+      },
+    ],
+    sensor: [
+      {
+        name: 'Home Became Empty',
+        unique_id: 'home_became_empty',
+        state: '{{ now().isoformat() }}',
+        device_class: 'timestamp',
+        icon: 'mdi:home-outline',
+      },
+    ],
+  }
+
   const pkg = {
     template: [
-      { binary_sensor: binarySensors, },
+      {
+        binary_sensor: [...personSensors, ...aggregateSensors],
+        sensor: [countSensor],
+      },
+      arrivedHomeTrigger,
+      leftHomeTrigger,
     ],
   }
 
