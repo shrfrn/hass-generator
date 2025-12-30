@@ -91,19 +91,6 @@ function buildAreaPackage(area, entities, scenes, areaConfig, globalConfig, pref
     },
   }
 
-  // People present template sensor
-  pkg.template = [
-    {
-      sensor: [
-        {
-          name: `${area.name} People Present`,
-          unique_id: `${prefix}people_present`,
-          state: buildPeopleTemplate(area.id),
-        },
-      ],
-    },
-  ]
-
   const includeExcludeInfo = { included, excluded, }
 
   return { pkg, includeExcludeInfo, }
@@ -179,6 +166,3 @@ function buildSceneSelector(area, areaScenes) {
   }
 }
 
-function buildPeopleTemplate(areaId) {
-  return `{{ states.person | selectattr('state', 'eq', '${areaId}') | map(attribute='name') | list | join(', ') or 'none' }}`
-}

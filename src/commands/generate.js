@@ -5,6 +5,7 @@ import YAML from 'yaml'
 import { paths } from '../paths.js'
 import { generateAreaPackages } from '../generators/area-package.js'
 import { generateLabelPackages } from '../generators/label-package.js'
+import { generateHomePackage } from '../generators/home-package.js'
 import { generateDashboard } from '../generators/dashboard/index.js'
 
 /**
@@ -59,6 +60,12 @@ export async function generate(options = {}) {
 
     const labelFiles = await generateLabelPackages(inventory, paths.packages())
     results.yaml.push(...labelFiles)
+
+    const homeFiles = await generateHomePackage(inventory, paths.packages())
+    results.yaml.push(...homeFiles)
+
+    // Generate index.yaml
+    generatePackageIndex(paths.packages(), results.yaml)
 
     console.log(`\n   Generated ${results.yaml.length} YAML files`)
   }
@@ -147,4 +154,91 @@ function ensureDir(dir) {
   if (!existsSync(dir)) {
     mkdirSync(dir, { recursive: true })
   }
+}
+
+/**
+ * Generate packages/index.yaml with manual and auto-generated entries
+ * @param {string} packagesDir - Path to packages directory
+ * @param {string[]} generatedFiles - List of generated package files
+ */
+function generatePackageIndex(packagesDir, generatedFiles) {
+  const indexPath = join(packagesDir, 'index.yaml')
+  const manualEntries = extractManualEntries(indexPath)
+
+  const lines = [
+    '# ============================================================',
+    '# Package Index - Auto-managed by hass-gen',
+    '# ============================================================',
+    '# DO NOT edit the auto-generated section below.',
+    '# Add manual packages in the section marked "Manual packages".',
+    '# ============================================================',
+    '',
+    '# ------------------------------------------------------------',
+    '# Manual packages (add your custom packages here)',
+    '# ------------------------------------------------------------',
+  ]
+
+  // Add manual entries
+  for (const entry of manualEntries) {
+    lines.push(entry)
+  }
+
+  if (manualEntries.length === 0) {
+    lines.push('# example: my_package: !include my_package.yaml')
+  }
+
+  lines.push('')
+  lines.push('# ------------------------------------------------------------')
+  lines.push('# Auto-generated packages (DO NOT EDIT below this line)')
+  lines.push('# ------------------------------------------------------------')
+
+  const sortedFiles = [...generatedFiles].sort()
+
+  for (const file of sortedFiles) {
+    const key = file.replace(/\//g, '_').replace('.yaml', '')
+    lines.push(`${key}: !include ${file}`)
+  }
+
+  lines.push('')
+
+  writeFileSync(indexPath, lines.join('\n'))
+  console.log('\n  ✓ index.yaml')
+}
+
+/**
+ * Extract manual entries from existing index.yaml
+ * @param {string} indexPath - Path to index.yaml
+ * @returns {string[]} Array of manual entry lines
+ */
+function extractManualEntries(indexPath) {
+  if (!existsSync(indexPath)) return []
+
+  const content = readFileSync(indexPath, 'utf-8')
+  const lines = content.split('\n')
+  const manualEntries = []
+
+  let inManualSection = false
+
+  for (const line of lines) {
+    if (line.includes('Manual packages')) {
+      inManualSection = true
+      continue
+    }
+
+    if (line.includes('Auto-generated')) {
+      inManualSection = false
+      continue
+    }
+
+    // Skip comments, dividers, and empty lines
+    const trimmed = line.trim()
+    const isComment = trimmed.startsWith('#')
+    const isDivider = trimmed.startsWith('# ---') || trimmed.startsWith('# ===')
+
+    if (inManualSection && trimmed && !isComment && !isDivider) {
+      manualEntries.push(line)
+    }
+  }
+
+  return manualEntries
 }
