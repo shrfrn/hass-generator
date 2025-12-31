@@ -111,6 +111,12 @@ function needsQuoting(str) {
   if (str === '') return true
   if (str === 'true' || str === 'false') return true
   if (str === 'null' || str === 'none') return true
+
+  // YAML boolean literals (on/off/yes/no) - must be quoted
+  const lowerStr = str.toLowerCase()
+  if (lowerStr === 'on' || lowerStr === 'off') return true
+  if (lowerStr === 'yes' || lowerStr === 'no') return true
+
   if (/^[0-9]/.test(str) && !str.includes('.')) return true
   if (/[:#\[\]{}|>&*!?]/.test(str)) return true
   if (str.startsWith(' ') || str.endsWith(' ')) return true
