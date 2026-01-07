@@ -53,9 +53,15 @@ if [ -z "$HAD_UI_CHANGES" ]; then
     git pull origin main
 fi
 
-# Checkout branch
-git checkout "$BRANCH"
-git pull origin "$BRANCH"
+# Checkout branch and reset to match origin (avoids divergence from previous rebases)
+git checkout "$BRANCH" || {
+    echo "ERROR: Could not checkout branch $BRANCH"
+    exit 1
+}
+git reset --hard origin/"$BRANCH" || {
+    echo "ERROR: Could not reset branch to origin/$BRANCH"
+    exit 1
+}
 
 # Only rebase if main has moved forward since branch was created
 BRANCH_BASE=$(git merge-base "$BRANCH" main)
