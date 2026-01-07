@@ -178,6 +178,14 @@ export interface AreaConfig {
 
   /** Labels to include (added to global included_labels for this area) */
   included_labels?: LabelId[]
+
+  /**
+   * Maps on/off actuators to their companion dimmable bulbs.
+   * The actuator controls power, the bulb controls brightness.
+   * Companion bulbs are auto-excluded from light groups and dashboard lists.
+   * @example { 'switch.mb_soc': 'light.mb_soc_bulb' }
+   */
+  dimmable_companions?: Partial<Record<EntityId, EntityId>>
 }
 
 export interface GeneratorConfig {

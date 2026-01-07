@@ -205,15 +205,7 @@ function buildSceneGrid(scenes) {
 }
 
 function buildLightsGrid(lights) {
-  const cards = lights.map(light => ({
-    type: 'custom:bubble-card',
-    card_type: 'button',
-    button_type: 'switch',
-    entity: light.entity_id,
-    name: formatEntityName(light.entity_id, light.name),
-    scrolling_effect: true,
-    tap_action: { action: 'toggle' },
-  }))
+  const cards = lights.map(light => buildLightCard(light))
 
   return {
     type: 'grid',
@@ -221,6 +213,50 @@ function buildLightsGrid(lights) {
     columns: 2,
     cards,
   }
+}
+
+function buildLightCard(light) {
+  const { dimmable, brightness_entity, toggle_entity, has_advanced_controls } = light
+
+  const card = {
+    type: 'custom:bubble-card',
+    card_type: 'button',
+    button_type: dimmable ? 'slider' : 'switch',
+    entity: brightness_entity,
+    name: formatEntityName(light.entity_id, light.name),
+    scrolling_effect: true,
+  }
+
+  // Build the toggle action (homeassistant.toggle works on any domain)
+  const toggleAction = brightness_entity !== toggle_entity
+    ? {
+        action: 'perform-action',
+        perform_action: 'homeassistant.toggle',
+        target: { entity_id: toggle_entity },
+      }
+    : { action: 'toggle' }
+
+  if (dimmable) {
+    // Slider: tap_action controls icon, button_action controls card area
+    card.tap_action = toggleAction
+    card.button_action = { tap_action: { action: 'none' } }
+
+    // For sliders with advanced controls, use double_tap instead of hold
+    // (hold conflicts with drag gesture on mobile)
+    if (has_advanced_controls) {
+      card.double_tap_action = { action: 'more-info' }
+    }
+  } else {
+    // Switch: tap anywhere toggles
+    card.tap_action = toggleAction
+
+    // Hold opens more-info dialog for lights with color/color_temp controls
+    if (has_advanced_controls) {
+      card.hold_action = { action: 'more-info' }
+    }
+  }
+
+  return card
 }
 
 function buildClimateCard(acEntity, fanEntity) {

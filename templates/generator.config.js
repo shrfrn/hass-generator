@@ -39,6 +39,13 @@ const config = {
   //     exclude_from_group: ['light.kt_notif'],  // Remove from light group
   //     excluded_labels: [],                     // Clear global exclusions for this area
   //     included_labels: ['outdoor'],            // Include outdoor lights in this area
+  //
+  //     // On/off actuator + dimmable smart bulb pairings
+  //     // The actuator (key) is shown in UI with slider controlling the bulb (value)
+  //     // Companion bulbs are auto-excluded from light groups and dashboard
+  //     dimmable_companions: {
+  //       'light.kt_lt_wall': 'light.kt_hue_bulb',
+  //     },
   //   },
 
   areas: {

@@ -89,7 +89,7 @@ export async function generate(options = {}) {
           continue
         }
 
-        const dashboardYaml = await generateDashboard(inventory, dashboardConfig)
+        const dashboardYaml = await generateDashboard(inventory, dashboardConfig, config)
 
         // Determine output path
         const outputPath = dashboardConfig.output

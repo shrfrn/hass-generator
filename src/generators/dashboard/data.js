@@ -5,9 +5,10 @@
  * Prepare area data for all areas based on inventory and config
  * @param {object} inventory - The HASS inventory data
  * @param {object} config - Dashboard config
+ * @param {object} generatorConfig - Generator config (for dimmable_companions, etc.)
  * @returns {Array} Array of areaData objects
  */
-export function prepareAllAreaData(inventory, config) {
+export function prepareAllAreaData(inventory, config, generatorConfig = {}) {
   const { areas, entities } = inventory
   const excludedAreas = new Set(config.excluded_areas || [])
   const pinnedAreas = config.pinned_areas || []
@@ -28,7 +29,8 @@ export function prepareAllAreaData(inventory, config) {
     }
 
     const areaConfig = config.areas?.[area.id] || {}
-    const areaData = buildAreaData(area, prefix, entityMap, sceneMap, areaConfig, allScenes)
+    const generatorAreaConfig = generatorConfig.areas?.[area.id] || {}
+    const areaData = buildAreaData(area, prefix, entityMap, sceneMap, areaConfig, generatorAreaConfig, allScenes)
 
     if (!areaData.lightGroup) {
       console.log(`  ⚠ Skipping ${area.name}: no light group`)
@@ -116,18 +118,19 @@ export function extractPrefix(entities, areaId) {
   return null
 }
 
-function buildAreaData(area, prefix, entityMap, sceneMap, areaConfig, allScenes) {
+function buildAreaData(area, prefix, entityMap, sceneMap, areaConfig, generatorAreaConfig, allScenes) {
   const areaEntities = entityMap.get(area.id) || []
   const areaScenes = sceneMap.get(area.id) || []
 
   const excludedLights = new Set(areaConfig.excluded_lights || [])
   const includedLights = areaConfig.included_lights || []
+  const dimmableCompanions = generatorAreaConfig.dimmable_companions || {}
 
   const lightGroup = `group.${prefix}lights`
   const acEntity = findAcEntity(areaEntities)
   const fanEntity = findFanEntity(areaEntities)
-  const lights = buildLightsList(areaEntities, excludedLights, includedLights)
-  const otherEntities = buildOtherList(areaEntities, excludedLights, lights, acEntity, fanEntity)
+  const lights = buildLightsList(areaEntities, excludedLights, includedLights, dimmableCompanions)
+  const otherEntities = buildOtherList(areaEntities, excludedLights, lights, acEntity, fanEntity, dimmableCompanions)
   const scenes = buildScenesList(areaScenes, areaConfig, allScenes)
 
   return {
@@ -163,37 +166,72 @@ function findFanEntity(entities) {
   return fanSwitch?.entity_id || null
 }
 
-function buildLightsList(entities, excludedLights, includedLights) {
+function buildLightsList(entities, excludedLights, includedLights, dimmableCompanions) {
   const includedSet = new Set(includedLights)
+
+  // Companion bulbs are controlled via their actuator - exclude from list
+  const companionBulbs = new Set(Object.values(dimmableCompanions))
+
   const result = []
 
   for (const entityId of includedLights) {
+    if (companionBulbs.has(entityId)) continue
+
     const entity = entities.find(e => e.entity_id === entityId)
 
     if (entity) {
-      result.push(entity)
+      result.push(enrichWithDimming(entity, dimmableCompanions))
     } else {
-      result.push({ entity_id: entityId, name: null })
+      result.push({ entity_id: entityId, name: null, dimmable: false, brightness_entity: entityId, toggle_entity: entityId, has_advanced_controls: false })
     }
   }
 
   const areaLights = entities.filter(e =>
     e.domain === 'light' &&
     !excludedLights.has(e.entity_id) &&
-    !includedSet.has(e.entity_id)
+    !includedSet.has(e.entity_id) &&
+    !companionBulbs.has(e.entity_id)
   )
 
-  result.push(...areaLights)
+  result.push(...areaLights.map(e => enrichWithDimming(e, dimmableCompanions)))
 
   return result
 }
 
-function buildOtherList(entities, excludedLights, lightsInSection, acEntity, fanEntity) {
+function enrichWithDimming(entity, dimmableCompanions) {
+  const modes = entity.attributes?.supported_color_modes || []
+  const isOnOffOnly = modes.length === 0 || (modes.length === 1 && modes[0] === 'onoff')
+
+  // Check if this actuator has a companion bulb for brightness control
+  const companionBulb = dimmableCompanions[entity.entity_id]
+
+  // Color modes that need more-info dialog for full control
+  const colorModes = ['color_temp', 'hs', 'xy', 'rgb', 'rgbw', 'rgbww']
+  const hasAdvancedControls = modes.some(m => colorModes.includes(m))
+
+  return {
+    ...entity,
+    dimmable: !isOnOffOnly || !!companionBulb,
+    brightness_entity: companionBulb || entity.entity_id,
+    toggle_entity: entity.entity_id,
+    has_advanced_controls: hasAdvancedControls,
+  }
+}
+
+function buildOtherList(entities, excludedLights, lightsInSection, acEntity, fanEntity, dimmableCompanions = {}) {
   const lightIds = new Set(lightsInSection.map(l => l.entity_id))
+
+  // Companion bulbs are controlled via their actuator - exclude from Other section too
+  const companionBulbs = new Set(Object.values(dimmableCompanions))
+
+  // Actuators that have companions shouldn't appear in Other (they're in Lights)
+  const actuatorsWithCompanions = new Set(Object.keys(dimmableCompanions))
 
   return entities.filter(e => {
     if (excludedLights.has(e.entity_id)) return true
     if (lightIds.has(e.entity_id)) return false
+    if (companionBulbs.has(e.entity_id)) return false
+    if (actuatorsWithCompanions.has(e.entity_id)) return false
     if (e.entity_id === acEntity || e.entity_id === fanEntity) return false
 
     const excludeDomains = [

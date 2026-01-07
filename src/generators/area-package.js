@@ -102,6 +102,10 @@ function buildLightGroup(area, entities, areaConfig, globalConfig, prefix) {
   const excludeList = areaConfig.exclude_from_group || []
   const excludeSet = new Set(excludeList)
 
+  // Companion bulbs are controlled via their actuator - exclude from group
+  const dimmableCompanions = areaConfig.dimmable_companions || {}
+  const companionBulbs = new Set(Object.values(dimmableCompanions))
+
   // Determine which labels to exclude (area overrides global, no hardcoded defaults)
   const globalExcludedLabels = globalConfig.excluded_labels || []
   const globalIncludedLabels = new Set(globalConfig.included_labels || [])
@@ -115,6 +119,7 @@ function buildLightGroup(area, entities, areaConfig, globalConfig, prefix) {
   // Get lights from this area (domain: light only)
   const areaLights = entities
     .filter(e => e.area_id === area.id && e.domain === 'light')
+    .filter(e => !companionBulbs.has(e.entity_id))
     .filter(e => {
       const entityLabels = e.labels || []
 
