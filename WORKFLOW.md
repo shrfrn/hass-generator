@@ -91,8 +91,9 @@ The generation workflow:
 | Script | Runs On | Description |
 |--------|---------|-------------|
 | `scripts/rebuild.sh` | Dev | Full pipeline: inventory → generate → ship |
-| `scripts/ship.sh` | Dev | Push to GitHub, trigger prod deploy |
-| `scripts/ship.sh --force` | Dev | Deploy already-pushed commits (skip push) |
+| `scripts/ship.sh` | Dev | Auto-commit if changes, push, trigger prod deploy |
+| `scripts/ship.sh -m "msg"` | Dev | Commit with custom message, push, deploy |
+| `scripts/ship.sh --force` | Dev | Deploy already-pushed commits (skip commit/push) |
 | `scripts/deploy.sh` | Prod | Pull from GitHub, merge, restart HA |
 
 ---
@@ -111,7 +112,8 @@ This fetches fresh data, regenerates everything, and deploys.
 
 ```bash
 npx hass-gen generate
-./scripts/ship.sh
+./scripts/ship.sh                    # Auto-commits as "WIP: <timestamp>"
+./scripts/ship.sh -m "Fix lights"    # Or with custom message
 ```
 
 No need to re-fetch inventory if HA entities haven't changed.
@@ -120,7 +122,7 @@ No need to re-fetch inventory if HA entities haven't changed.
 
 ```bash
 npx hass-gen generate --dashboard-only
-./scripts/ship.sh
+./scripts/ship.sh                    # Auto-commits and deploys
 ```
 
 ### Re-deploy already-pushed commits
@@ -131,7 +133,7 @@ If commits were pushed but not deployed (e.g., prod had issues), use `--force`:
 ./scripts/ship.sh --force
 ```
 
-This skips the "no new commits" check and triggers prod deploy directly.
+This skips the commit/push steps and triggers prod deploy directly.
 
 ---
 

@@ -4,6 +4,11 @@
 # =============================================================================
 # Pushes current branch to GitHub, then SSHs to prod to trigger deploy.
 # Shows progress with spinner while waiting for config check and restart.
+#
+# Usage:
+#   ./ship.sh              Auto-commit WIP if changes exist, then deploy
+#   ./ship.sh -m "msg"     Commit with custom message, then deploy
+#   ./ship.sh --force      Deploy already-pushed commits
 # =============================================================================
 
 # Guard: Prevent running on prod
@@ -11,6 +16,10 @@ if [ -f /etc/hassio.json ]; then
     echo "❌ This script should be run from your dev machine, not prod"
     exit 1
 fi
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
+cd "$PROJECT_ROOT"
 
 PROD_HOST="root@homeassistant.local"
 PROD_SCRIPT="/root/deploy.sh"
@@ -26,10 +35,25 @@ NC='\033[0m'
 
 SPINNER='⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏'
 
+# Parse arguments
 FORCE=false
-if [ "$1" = "--force" ] || [ "$1" = "-f" ]; then
-    FORCE=true
-fi
+COMMIT_MSG=""
+
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        -f|--force)
+            FORCE=true
+            shift
+            ;;
+        -m)
+            COMMIT_MSG="$2"
+            shift 2
+            ;;
+        *)
+            shift
+            ;;
+    esac
+done
 
 BRANCH=$(git branch --show-current)
 
@@ -38,7 +62,28 @@ if [ "$BRANCH" = "main" ]; then
     exit 1
 fi
 
+# Check for uncommitted changes
+HAS_CHANGES=false
+if ! git diff --quiet || ! git diff --cached --quiet || [ -n "$(git ls-files --others --exclude-standard)" ]; then
+    HAS_CHANGES=true
+fi
+
 UNPUSHED=$(git log origin/$BRANCH..$BRANCH --oneline 2>/dev/null | wc -l | tr -d ' ')
+
+# If uncommitted changes exist, auto-commit them
+if [ "$HAS_CHANGES" = true ]; then
+    if [ -z "$COMMIT_MSG" ]; then
+        COMMIT_MSG="WIP: $(date '+%Y-%m-%d %H:%M')"
+    fi
+    
+    echo ""
+    echo -e "${WHITE}📝 Committing changes...${NC}"
+    git add -A
+    git commit -m "$COMMIT_MSG" 2>&1 | sed "s/^/   /"
+    
+    # Recalculate unpushed commits
+    UNPUSHED=$(git log origin/$BRANCH..$BRANCH --oneline 2>/dev/null | wc -l | tr -d ' ')
+fi
 
 if [ "$UNPUSHED" -eq 0 ] && [ "$FORCE" = false ]; then
     echo -e "${YELLOW}No new commits to deploy on $BRANCH${NC}"
