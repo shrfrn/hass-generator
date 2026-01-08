@@ -71,6 +71,8 @@ export async function generate(options = {}) {
   }
 
   // Generate dashboards
+  const dashboardRegistrations = []
+
   if (!yamlOnly) {
     const dashboardConfigs = await discoverDashboards(dashboard)
 
@@ -103,6 +105,22 @@ export async function generate(options = {}) {
         }
 
         results.dashboards.push(name)
+
+        // Collect registration info for configuration.yaml update
+        if (dashboardConfig.dashboard_path) {
+          dashboardRegistrations.push({
+            path: dashboardConfig.dashboard_path,
+            title: dashboardConfig.dashboard_title || dashboardConfig.dashboard_name || name,
+            icon: dashboardConfig.dashboard_icon || 'mdi:view-dashboard',
+            show_in_sidebar: dashboardConfig.show_in_sidebar !== false,
+            filename: dashboardConfig.output || `lovelace/${name}.yaml`,
+          })
+        }
+      }
+
+      // Update configuration.yaml with dashboard registrations
+      if (!dryRun && dashboardRegistrations.length > 0) {
+        updateConfigurationYaml(dashboardRegistrations)
       }
     }
   }
@@ -241,4 +259,53 @@ function extractManualEntries(indexPath) {
   }
 
   return manualEntries
+}
+
+/**
+ * Update configuration.yaml with dashboard registrations
+ * @param {Array<{ path: string, title: string, icon: string, show_in_sidebar: boolean, filename: string }>} registrations
+ */
+function updateConfigurationYaml(registrations) {
+  const configPath = join(process.cwd(), 'configuration.yaml')
+
+  if (!existsSync(configPath)) {
+    console.warn('\n⚠️  configuration.yaml not found, skipping dashboard registration')
+    return
+  }
+
+  const content = readFileSync(configPath, 'utf-8')
+  const doc = YAML.parseDocument(content)
+
+  let lovelace = doc.get('lovelace')
+
+  if (!lovelace) {
+    lovelace = doc.createNode({})
+    doc.set('lovelace', lovelace)
+  }
+
+  let dashboards = doc.getIn(['lovelace', 'dashboards'])
+
+  if (!dashboards) {
+    dashboards = doc.createNode({})
+    doc.setIn(['lovelace', 'dashboards'], dashboards)
+  }
+
+  // Track which paths we're managing
+  const managedPaths = new Set(registrations.map(r => r.path))
+
+  // Update or add each registration
+  for (const reg of registrations) {
+    const dashboardEntry = {
+      mode: 'yaml',
+      title: reg.title,
+      icon: reg.icon,
+      show_in_sidebar: reg.show_in_sidebar,
+      filename: reg.filename,
+    }
+
+    doc.setIn(['lovelace', 'dashboards', reg.path], dashboardEntry)
+  }
+
+  writeFileSync(configPath, doc.toString())
+  console.log(`\n  ✓ configuration.yaml (${registrations.length} dashboard${registrations.length > 1 ? 's' : ''} registered)`)
 }

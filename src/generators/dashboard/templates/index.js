@@ -2,6 +2,7 @@
 
 const TEMPLATES = {
   bubble: () => import('./bubble/renderer.js'),
+  'bubble-views': () => import('./bubble-views/renderer.js'),
   // Future templates:
   // mushroom: () => import('./mushroom/renderer.js'),
   // minimal: () => import('./minimal/renderer.js'),
