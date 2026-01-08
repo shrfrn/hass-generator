@@ -14,7 +14,7 @@ export function render(areaDataList, config) {
 
   const views = []
 
-  const mainView = buildMainView(areaDataList, dashboardName, dashboardPath, defaultSceneSuffix)
+  const mainView = buildMainView(areaDataList, dashboardName, dashboardPath, defaultSceneSuffix, config)
   views.push(mainView)
 
   for (const areaData of areaDataList) {
@@ -30,10 +30,18 @@ export function render(areaDataList, config) {
   return { views }
 }
 
-function buildMainView(areaDataList, dashboardName, dashboardPath, defaultSceneSuffix) {
-  const cards = [
-    { type: 'heading', heading: 'Areas' },
-  ]
+function buildMainView(areaDataList, dashboardName, dashboardPath, defaultSceneSuffix, config) {
+  const cards = []
+
+  if (config.home_card) {
+    cards.push(buildHomeCard(config.home_card))
+  }
+
+  if (config.presence_card) {
+    cards.push(buildPresenceCard(config.presence_card))
+  }
+
+  cards.push({ type: 'heading', heading: 'Areas' })
 
   for (const areaData of areaDataList) {
     const { area, prefix, visibleToUsers } = areaData
@@ -51,6 +59,67 @@ function buildMainView(areaDataList, dashboardName, dashboardPath, defaultSceneS
         cards,
       },
     ],
+  }
+}
+
+function buildHomeCard(homeCardConfig) {
+  const subButtons = (homeCardConfig.sub_buttons || []).map(btn => {
+    const subBtn = {
+      entity: btn.entity,
+    }
+
+    if (btn.icon) subBtn.icon = btn.icon
+    if (btn.name) subBtn.name = btn.name
+
+    if (btn.action === 'hold') {
+      subBtn.tap_action = { action: 'none' }
+      subBtn.hold_action = { action: 'toggle' }
+    } else {
+      subBtn.tap_action = { action: 'toggle' }
+    }
+
+    return subBtn
+  })
+
+  return {
+    type: 'custom:bubble-card',
+    card_type: 'button',
+    button_type: 'switch',
+    entity: homeCardConfig.entity || 'sun.sun',
+    name: ' ',
+    icon: 'mdi:home-outline',
+    card_layout: 'normal',
+    rows: '2',
+    tap_action: { action: 'none' },
+    hold_action: { action: 'none' },
+    button_action: { tap_action: { action: 'none' } },
+    sub_button: subButtons,
+  }
+}
+
+function buildPresenceCard(presenceCardConfig) {
+  const subButtons = (presenceCardConfig.users || []).map(user => ({
+    entity: user.entity,
+    name: user.name,
+    icon: user.icon || 'mdi:account',
+    show_name: true,
+    show_state: false,
+    show_last_changed: false,
+  }))
+
+  return {
+    type: 'custom:bubble-card',
+    card_type: 'button',
+    button_type: 'state',
+    entity: presenceCardConfig.entity || 'binary_sensor.anyone_home',
+    name: ' ',
+    icon: 'mdi:account-multiple',
+    show_name: true,
+    show_icon: true,
+    show_state: false,
+    scrolling_effect: false,
+    button_action: {},
+    sub_button: subButtons,
   }
 }
 
