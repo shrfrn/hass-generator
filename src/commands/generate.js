@@ -6,6 +6,8 @@ import { paths } from '../paths.js'
 import { generateAreaPackages } from '../generators/area-package.js'
 import { generateLabelPackages } from '../generators/label-package.js'
 import { generateHomePackage } from '../generators/home-package.js'
+import { generateSceneTemplates } from '../generators/scene-template-package.js'
+import { generateUsersFile } from '../generators/users-package.js'
 import { generateDashboard } from '../generators/dashboard/index.js'
 
 /**
@@ -54,6 +56,7 @@ export async function generate(options = {}) {
     ensureDir(paths.packages())
     ensureDir(paths.packagesAreas())
     ensureDir(paths.packagesLabels())
+    ensureDir(paths.packagesSceneTemplates())
 
     const areaFiles = await generateAreaPackages(inventory, config, paths.packages())
     results.yaml.push(...areaFiles)
@@ -63,6 +66,12 @@ export async function generate(options = {}) {
 
     const homeFiles = await generateHomePackage(inventory, paths.packages())
     results.yaml.push(...homeFiles)
+
+    // Scene templates (not included in index.yaml - for manual use only)
+    await generateSceneTemplates(inventory, config, paths.packages())
+
+    // Users file (syncs USERS from inventory, preserves manual groups)
+    await generateUsersFile(inventory)
 
     // Generate index.yaml
     generatePackageIndex(paths.packages(), results.yaml)

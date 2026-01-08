@@ -252,7 +252,9 @@ function buildScenesList(areaScenes, areaConfig, allScenes) {
   const excludedScenes = new Set(areaConfig.excluded_scenes || [])
   const includedScenes = areaConfig.included_scenes || []
 
-  const filtered = areaScenes.filter(s => !excludedScenes.has(s.entity_id))
+  // Filter out template scenes (name ends with _template) and excluded scenes
+  const isTemplateScene = s => s.name?.endsWith('_template') || s.entity_id?.endsWith('_template')
+  const filtered = areaScenes.filter(s => !excludedScenes.has(s.entity_id) && !isTemplateScene(s))
 
   const includedSet = new Set(filtered.map(s => s.entity_id))
 
@@ -261,9 +263,9 @@ function buildScenesList(areaScenes, areaConfig, allScenes) {
 
     const scene = allScenes.find(s => s.entity_id === sceneId)
 
-    if (scene) {
+    if (scene && !isTemplateScene(scene)) {
       filtered.push(scene)
-    } else {
+    } else if (!scene) {
       filtered.push({ entity_id: sceneId, name: null })
     }
   }

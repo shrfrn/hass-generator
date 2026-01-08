@@ -34,6 +34,7 @@ export const paths = {
   packages: () => cwdPath('packages'),
   packagesAreas: () => cwdPath('packages', 'areas'),
   packagesLabels: () => cwdPath('packages', 'labels'),
+  packagesSceneTemplates: () => cwdPath('packages', 'scene-templates'),
   lovelace: () => cwdPath('lovelace'),
   generatedDashboard: () => cwdPath('lovelace', 'generated.yaml'),
 }
