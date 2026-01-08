@@ -87,7 +87,7 @@ function buildAreaView(areaData, dashboardPath, defaultSceneSuffix) {
   }
 
   const view = {
-    title: area.name,
+    icon: area.icon || 'mdi:home',
     path: areaPath,
     sections: [
       {
