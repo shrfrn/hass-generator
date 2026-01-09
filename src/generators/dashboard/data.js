@@ -6,9 +6,10 @@
  * @param {object} inventory - The HASS inventory data
  * @param {object} config - Dashboard config
  * @param {object} generatorConfig - Generator config (for dimmable_companions, etc.)
+ * @param {object} [translator] - Optional translator for i18n
  * @returns {Array} Array of areaData objects
  */
-export function prepareAllAreaData(inventory, config, generatorConfig = {}) {
+export function prepareAllAreaData(inventory, config, generatorConfig = {}, translator = null) {
   const { areas, entities } = inventory
   const excludedAreas = new Set(config.excluded_areas || [])
   const pinnedAreas = config.pinned_areas || []

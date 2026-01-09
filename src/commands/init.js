@@ -37,7 +37,7 @@ export async function init(destination) {
   console.log(`🏠 Initializing HASS generator project in ${targetDir}...\n`)
 
   // Create directories
-  const dirs = ['inventory/types', 'dashboards', 'scripts', 'packages', 'lovelace']
+  const dirs = ['inventory/types', 'i18n', 'dashboards', 'scripts', 'packages', 'lovelace']
 
   for (const dir of dirs) {
     const dirPath = join(targetDir, dir)

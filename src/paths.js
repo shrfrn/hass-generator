@@ -30,6 +30,12 @@ export const paths = {
   hassTypes: () => cwdPath('inventory', 'types', 'hass.d.ts'),
   configTypes: () => cwdPath('inventory', 'types', 'config.d.ts'),
 
+  // i18n files
+  i18n: () => cwdPath('i18n'),
+  entities: () => cwdPath('i18n', 'entities.csv'),
+  uiStrings: () => cwdPath('i18n', 'ui-strings.csv'),
+  areas: () => cwdPath('i18n', 'areas.csv'),
+
   // Output folders
   packages: () => cwdPath('packages'),
   packagesAreas: () => cwdPath('packages', 'areas'),

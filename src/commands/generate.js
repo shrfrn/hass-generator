@@ -9,12 +9,13 @@ import { generateHomePackage } from '../generators/home-package.js'
 import { generateSceneTemplates } from '../generators/scene-template-package.js'
 import { generateUsersFile } from '../generators/users-package.js'
 import { generateDashboard } from '../generators/dashboard/index.js'
+import { createTranslator } from '../i18n/index.js'
 
 /**
- * @param {{ dryRun?: boolean, force?: boolean, yamlOnly?: boolean, dashboardOnly?: boolean, dashboard?: string }} options
+ * @param {{ dryRun?: boolean, force?: boolean, yamlOnly?: boolean, dashboardOnly?: boolean, dashboard?: string, lang?: string }} options
  */
 export async function generate(options = {}) {
-  const { dryRun, force, yamlOnly, dashboardOnly, dashboard } = options
+  const { dryRun, force, yamlOnly, dashboardOnly, dashboard, lang } = options
 
   // Check for required files
   if (!existsSync(paths.generatorConfig())) {
@@ -100,30 +101,46 @@ export async function generate(options = {}) {
           continue
         }
 
-        const dashboardYaml = await generateDashboard(inventory, dashboardConfig, config)
+        // Determine which language variants to generate
+        const languageVariants = getLanguageVariants(dashboardConfig, lang)
 
-        // Determine output path
-        const outputPath = dashboardConfig.output
-          ? join(process.cwd(), dashboardConfig.output)
-          : join(paths.lovelace(), `${name}.yaml`)
+        for (const variant of languageVariants) {
+          const translator = createTranslator(variant.lang)
 
-        if (!dryRun) {
-          ensureDir(join(outputPath, '..'))
-          writeFileSync(outputPath, YAML.stringify(dashboardYaml))
-          console.log(`   📝 Written to ${dashboardConfig.output || `lovelace/${name}.yaml`}`)
-        }
+          // Merge variant props into config
+          const variantConfig = { ...dashboardConfig, ...variant }
 
-        results.dashboards.push(name)
+          const dashboardYaml = await generateDashboard(inventory, variantConfig, config, translator)
 
-        // Collect registration info for configuration.yaml update
-        if (dashboardConfig.dashboard_path) {
-          dashboardRegistrations.push({
-            path: dashboardConfig.dashboard_path,
-            title: dashboardConfig.dashboard_title || dashboardConfig.dashboard_name || name,
-            icon: dashboardConfig.dashboard_icon || 'mdi:view-dashboard',
-            show_in_sidebar: dashboardConfig.show_in_sidebar !== false,
-            filename: dashboardConfig.output || `lovelace/${name}.yaml`,
-          })
+          // Determine output path (use variant output or add lang suffix)
+          const outputPath = variant.output
+            ? join(process.cwd(), variant.output)
+            : dashboardConfig.output
+              ? join(process.cwd(), addLangSuffix(dashboardConfig.output, variant.lang, languageVariants.length > 1))
+              : join(paths.lovelace(), `${name}${languageVariants.length > 1 ? `-${variant.lang}` : ''}.yaml`)
+
+          const outputRelative = variant.output
+            || (languageVariants.length > 1 ? addLangSuffix(dashboardConfig.output || `lovelace/${name}.yaml`, variant.lang, true) : dashboardConfig.output || `lovelace/${name}.yaml`)
+
+          if (!dryRun) {
+            ensureDir(join(outputPath, '..'))
+            writeFileSync(outputPath, YAML.stringify(dashboardYaml))
+            console.log(`   📝 Written to ${outputRelative}`)
+          }
+
+          results.dashboards.push(`${name}${languageVariants.length > 1 ? `-${variant.lang}` : ''}`)
+
+          // Collect registration info for configuration.yaml update
+          const regPath = variant.dashboard_path || dashboardConfig.dashboard_path
+          if (regPath) {
+            dashboardRegistrations.push({
+              path: regPath,
+              title: variant.dashboard_title || dashboardConfig.dashboard_title || dashboardConfig.dashboard_name || name,
+              icon: variant.dashboard_icon || dashboardConfig.dashboard_icon || 'mdi:view-dashboard',
+              show_in_sidebar: (variant.show_in_sidebar ?? dashboardConfig.show_in_sidebar) !== false,
+              filename: outputRelative,
+            })
+          }
         }
       }
 
@@ -181,6 +198,56 @@ function ensureDir(dir) {
   if (!existsSync(dir)) {
     mkdirSync(dir, { recursive: true })
   }
+}
+
+/**
+ * Get language variants to generate based on config and CLI flag
+ * @param {object} dashboardConfig - Dashboard config
+ * @param {string} [langFlag] - CLI --lang flag value
+ * @returns {Array<{ lang: string, [key: string]: any }>}
+ */
+function getLanguageVariants(dashboardConfig, langFlag) {
+  const { languages } = dashboardConfig
+
+  // If no languages array, use single-language mode
+  if (!languages || languages.length === 0) {
+    const lang = langFlag || dashboardConfig.language || 'en'
+    return [{ lang }]
+  }
+
+  // --lang all generates all variants
+  if (langFlag === 'all') {
+    return languages
+  }
+
+  // --lang <code> filters to specific language
+  if (langFlag) {
+    const variant = languages.find(v => v.lang === langFlag)
+    if (variant) return [variant]
+
+    // Fall back to using langFlag with base config
+    console.warn(`   ⚠ Language '${langFlag}' not in config.languages, using base config`)
+    return [{ lang: langFlag }]
+  }
+
+  // No flag - generate all variants
+  return languages
+}
+
+/**
+ * Add language suffix to output path
+ * @param {string} outputPath - Original output path
+ * @param {string} lang - Language code
+ * @param {boolean} addSuffix - Whether to add suffix
+ * @returns {string}
+ */
+function addLangSuffix(outputPath, lang, addSuffix) {
+  if (!addSuffix) return outputPath
+
+  const lastDot = outputPath.lastIndexOf('.')
+  if (lastDot === -1) return `${outputPath}-${lang}`
+
+  return `${outputPath.slice(0, lastDot)}-${lang}${outputPath.slice(lastDot)}`
 }
 
 /**

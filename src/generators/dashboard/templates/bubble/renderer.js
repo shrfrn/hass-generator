@@ -5,24 +5,28 @@
  * Render a complete dashboard from area data
  * @param {Array} areaDataList - Array of prepared area data
  * @param {object} config - Dashboard config
+ * @param {object} [translator] - Optional translator with tEntity, tUi functions
  * @returns {object} Lovelace dashboard YAML structure
  */
-export function render(areaDataList, config) {
+export function render(areaDataList, config, translator = null) {
   const dashboardName = config.dashboard_name || 'Home'
   const defaultSceneSuffix = config.default_scene_suffix || 'standard'
 
+  // Create helper functions that use translator if available
+  const t = createTranslationHelpers(translator)
+
   const previewCards = [
-    { type: 'heading', heading: 'Areas' },
+    { type: 'heading', heading: t.ui('heading.areas') },
   ]
   const popupCards = []
 
   for (const areaData of areaDataList) {
     const { area, prefix, visibleToUsers } = areaData
 
-    const previewCard = buildPreviewCard(area, prefix, areaData, defaultSceneSuffix)
+    const previewCard = buildPreviewCard(area, prefix, areaData, defaultSceneSuffix, t)
     previewCards.push(wrapWithUserCondition(previewCard, visibleToUsers))
 
-    const detailsPopup = buildDetailsPopup(area, prefix, areaData, defaultSceneSuffix)
+    const detailsPopup = buildDetailsPopup(area, prefix, areaData, defaultSceneSuffix, t)
     popupCards.push(wrapWithUserCondition(detailsPopup, visibleToUsers))
 
     const userNote = visibleToUsers ? ` (${visibleToUsers.length} users)` : ''
@@ -46,6 +50,28 @@ export function render(areaDataList, config) {
   }
 }
 
+/**
+ * Create translation helper functions
+ * @param {object} translator - Translator object or null
+ * @returns {{ entity: Function, ui: Function, area: Function }}
+ */
+function createTranslationHelpers(translator) {
+  if (translator) {
+    return {
+      entity: (entityId, originalName) => translator.tEntity(entityId, originalName),
+      ui: key => translator.tUi(key),
+      area: (areaId, originalName) => translator.tArea(areaId, originalName),
+    }
+  }
+
+  // Fallback when no translator
+  return {
+    entity: (entityId, originalName) => formatEntityName(entityId, originalName),
+    ui: key => key.split('.').pop() || key,
+    area: (areaId, originalName) => originalName || areaId,
+  }
+}
+
 function wrapWithUserCondition(card, visibleToUsers) {
   if (!visibleToUsers || visibleToUsers.length === 0) {
     return card
@@ -63,7 +89,7 @@ function wrapWithUserCondition(card, visibleToUsers) {
   }
 }
 
-function buildPreviewCard(area, prefix, areaData, defaultSceneSuffix) {
+function buildPreviewCard(area, prefix, areaData, defaultSceneSuffix, t) {
   const { lightGroup, acEntity, fanEntity } = areaData
   const popupHash = `#${prefix}details`
   const defaultScene = `scene.${prefix}${defaultSceneSuffix}`
@@ -73,7 +99,7 @@ function buildPreviewCard(area, prefix, areaData, defaultSceneSuffix) {
     card_type: 'button',
     button_type: 'switch',
     entity: lightGroup,
-    name: area.name,
+    name: t.area(area.id, area.name),
     icon: area.icon || 'mdi:home',
     scrolling_effect: true,
     tap_action: {
@@ -121,7 +147,7 @@ function buildPreviewCard(area, prefix, areaData, defaultSceneSuffix) {
   return card
 }
 
-function buildDetailsPopup(area, prefix, areaData, defaultSceneSuffix) {
+function buildDetailsPopup(area, prefix, areaData, defaultSceneSuffix, t) {
   const { lightGroup, scenes, lights, acEntity, fanEntity, otherEntities } = areaData
   const popupHash = `#${prefix}details`
   const defaultScene = `scene.${prefix}${defaultSceneSuffix}`
@@ -133,7 +159,7 @@ function buildDetailsPopup(area, prefix, areaData, defaultSceneSuffix) {
     card_type: 'pop-up',
     hash: popupHash,
     button_type: 'switch',
-    name: area.name,
+    name: t.area(area.id, area.name),
     icon: area.icon || 'mdi:home',
     entity: lightGroup,
     tap_action: {
@@ -152,23 +178,23 @@ function buildDetailsPopup(area, prefix, areaData, defaultSceneSuffix) {
   const filteredScenes = scenes.filter(s => s.entity_id !== defaultSceneId)
 
   if (filteredScenes.length > 0) {
-    cards.push(buildSeparator('Scenes'))
-    cards.push(buildSceneGrid(filteredScenes))
+    cards.push(buildSeparator(t.ui('section.scenes')))
+    cards.push(buildSceneGrid(filteredScenes, t))
   }
 
   if (lights.length > 0) {
-    cards.push(buildSeparator('Lights'))
-    cards.push(buildLightsGrid(lights))
+    cards.push(buildSeparator(t.ui('section.lights')))
+    cards.push(buildLightsGrid(lights, t))
   }
 
   if (acEntity || fanEntity) {
-    cards.push(buildSeparator('Climate'))
-    cards.push(buildClimateCard(acEntity, fanEntity))
+    cards.push(buildSeparator(t.ui('section.climate')))
+    cards.push(buildClimateCard(acEntity, fanEntity, t))
   }
 
   if (otherEntities.length > 0) {
-    cards.push(buildSeparator('Other'))
-    cards.push(buildOtherGrid(otherEntities))
+    cards.push(buildSeparator(t.ui('section.other')))
+    cards.push(buildOtherGrid(otherEntities, t))
   }
 
   return {
@@ -185,13 +211,13 @@ function buildSeparator(name) {
   }
 }
 
-function buildSceneGrid(scenes) {
+function buildSceneGrid(scenes, t) {
   const cards = scenes.map(scene => ({
     type: 'custom:bubble-card',
     card_type: 'button',
     button_type: 'switch',
     entity: scene.entity_id,
-    name: formatEntityName(scene.entity_id, scene.name),
+    name: t.entity(scene.entity_id, scene.name),
     scrolling_effect: true,
     tap_action: { action: 'toggle' },
   }))
@@ -204,8 +230,8 @@ function buildSceneGrid(scenes) {
   }
 }
 
-function buildLightsGrid(lights) {
-  const cards = lights.map(light => buildLightCard(light))
+function buildLightsGrid(lights, t) {
+  const cards = lights.map(light => buildLightCard(light, t))
 
   return {
     type: 'grid',
@@ -215,7 +241,7 @@ function buildLightsGrid(lights) {
   }
 }
 
-function buildLightCard(light) {
+function buildLightCard(light, t) {
   const { dimmable, brightness_entity, toggle_entity, has_advanced_controls } = light
 
   const card = {
@@ -223,7 +249,7 @@ function buildLightCard(light) {
     card_type: 'button',
     button_type: dimmable ? 'slider' : 'switch',
     entity: brightness_entity,
-    name: formatEntityName(light.entity_id, light.name),
+    name: t.entity(light.entity_id, light.name),
     scrolling_effect: true,
   }
 
@@ -259,12 +285,12 @@ function buildLightCard(light) {
   return card
 }
 
-function buildClimateCard(acEntity, fanEntity) {
+function buildClimateCard(acEntity, fanEntity, t) {
   const card = {
     type: 'custom:bubble-card',
     card_type: 'climate',
     entity: acEntity,
-    name: 'AC',
+    name: t.ui('climate.ac'),
     min_temp: 16,
     max_temp: 30,
     step: 1,
@@ -302,13 +328,13 @@ function buildClimateCard(acEntity, fanEntity) {
   return card
 }
 
-function buildOtherGrid(entities) {
+function buildOtherGrid(entities, t) {
   const cards = entities.map(entity => ({
     type: 'custom:bubble-card',
     card_type: 'button',
     button_type: 'switch',
     entity: entity.entity_id,
-    name: formatEntityName(entity.entity_id, entity.name),
+    name: t.entity(entity.entity_id, entity.name),
     scrolling_effect: true,
     tap_action: { action: 'toggle' },
   }))
@@ -347,4 +373,3 @@ function formatEntityName(entityId, name) {
     .map(word => word.charAt(0).toUpperCase() + word.slice(1))
     .join(' ')
 }
-

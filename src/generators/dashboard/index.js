@@ -9,9 +9,10 @@ import { loadTemplate, getAvailableTemplates } from './templates/index.js'
  * @param {object} inventory - The HASS inventory data
  * @param {object} config - Dashboard config (must include 'template' field)
  * @param {object} generatorConfig - Generator config (for dimmable_companions, etc.)
+ * @param {object} translator - Translator object with tEntity, tUi functions
  * @returns {Promise<object>} Lovelace dashboard YAML structure
  */
-export async function generateDashboard(inventory, config, generatorConfig = {}) {
+export async function generateDashboard(inventory, config, generatorConfig = {}, translator = null) {
   const templateName = config.template
 
   if (!templateName) {
@@ -22,11 +23,11 @@ export async function generateDashboard(inventory, config, generatorConfig = {})
   console.log(`\n🎨 Generating dashboard with template: ${templateName}`)
 
   const template = await loadTemplate(templateName)
-  const areaDataList = prepareAllAreaData(inventory, config, generatorConfig)
+  const areaDataList = prepareAllAreaData(inventory, config, generatorConfig, translator)
 
   console.log(`   Processing ${areaDataList.length} areas...`)
 
-  return template.render(areaDataList, config)
+  return template.render(areaDataList, config, translator)
 }
 
 // Re-export for convenience

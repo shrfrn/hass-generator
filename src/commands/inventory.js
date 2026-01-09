@@ -6,6 +6,7 @@ import { connect, disconnect } from '../websocket.js'
 import { fetchAllData } from '../fetchers.js'
 import { transformData } from '../transform.js'
 import { checkNamingConsistency, printNamingReport, writeNamingReport } from '../validation/naming-check.js'
+import { mergeEntities, mergeAreas } from '../i18n/merge-csv.js'
 
 export async function inventory() {
   // Load .env from current directory
@@ -40,9 +41,10 @@ export async function inventory() {
     console.log(`   ${data.labels?.length || 0} labels`)
     console.log(`   ${data.floors?.length || 0} floors`)
 
-    // Ensure inventory directories exist
+    // Ensure directories exist
     ensureDir(paths.inventory())
     ensureDir(paths.typesDir())
+    ensureDir(paths.i18n())
 
     // Write inventory files
     console.log('\n💾 Writing inventory files...')
@@ -51,6 +53,23 @@ export async function inventory() {
     writeEntitiesJs(data)
     writeHassTypes(data)
     writeConfigTypes()
+
+    // Merge entities (preserves existing translations, adds new entities)
+    console.log('\n🌐 Updating i18n...')
+    const i18nResult = mergeEntities(paths.entities(), data.entities || [])
+    console.log(`   ✅ i18n/entities.csv`)
+
+    if (i18nResult.added > 0 || i18nResult.removed > 0) {
+      console.log(`      ${i18nResult.added} new, ${i18nResult.removed} removed, ${i18nResult.updated} updated`)
+    }
+
+    // Merge areas (separate file)
+    const areasResult = mergeAreas(paths.areas(), data.areas || [])
+    console.log(`   ✅ i18n/areas.csv`)
+
+    if (areasResult.added > 0 || areasResult.removed > 0) {
+      console.log(`      ${areasResult.added} new, ${areasResult.removed} removed, ${areasResult.updated} updated`)
+    }
 
     console.log('\n🔍 Checking naming consistency...')
     const namingResults = checkNamingConsistency(data)

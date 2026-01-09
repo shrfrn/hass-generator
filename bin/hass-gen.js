@@ -42,6 +42,7 @@ program
   .option('--yaml-only', 'Generate only YAML packages')
   .option('--dashboard-only', 'Generate only dashboards')
   .option('-d, --dashboard <names>', 'Generate specific dashboard(s), comma-separated')
+  .option('-l, --lang <code>', 'Language code for translations (e.g., en, he)')
   .action(async (options) => {
     const { generate } = await import('../src/commands/generate.js')
     await generate(options)
