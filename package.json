@@ -12,6 +12,8 @@
     "templates/"
   ],
   "scripts": {
+    "lint": "eslint src/",
+    "lint:fix": "eslint src/ --fix",
     "test": "echo \"No tests yet\" && exit 0"
   },
   "keywords": [
@@ -31,6 +33,10 @@
     "dotenv": "^16.3.1",
     "yaml": "^2.3.4",
     "ws": "^8.16.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.0.0",
+    "eslint": "^9.0.0"
   }
 }
 

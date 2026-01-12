@@ -1,5 +1,8 @@
+// @ts-check
 // Bubble Card Views template renderer
 // Generates multi-view Lovelace dashboard using HA built-in views instead of popups
+
+import { createTranslationHelpers, wrapWithUserCondition } from '../../shared.js'
 
 /**
  * Render a multi-view dashboard from area data
@@ -9,477 +12,416 @@
  * @returns {object} Lovelace dashboard YAML structure
  */
 export function render(areaDataList, config, translator = null) {
-  const dashboardName = config.dashboard_name || 'Home'
-  const dashboardPath = config.dashboard_path || 'views'
-  const defaultSceneSuffix = config.default_scene_suffix || 'standard'
+	const dashboardName = config.dashboard_name || 'Home'
+	const dashboardPath = config.dashboard_path || 'views'
+	const defaultSceneSuffix = config.default_scene_suffix || 'standard'
 
-  // Create helper functions that use translator if available
-  const t = createTranslationHelpers(translator)
+	// Create helper functions that use translator if available
+	const t = createTranslationHelpers(translator)
 
-  const views = []
+	const views = []
 
-  const mainView = buildMainView(areaDataList, dashboardName, dashboardPath, defaultSceneSuffix, config, t)
-  views.push(mainView)
+	const mainView = buildMainView(areaDataList, dashboardName, dashboardPath, defaultSceneSuffix, config, t)
+	views.push(mainView)
 
-  for (const areaData of areaDataList) {
-    const { area, visibleToUsers } = areaData
+	for (const areaData of areaDataList) {
+		const { area, visibleToUsers } = areaData
 
-    const areaView = buildAreaView(areaData, dashboardPath, defaultSceneSuffix, t)
-    views.push(areaView)
+		const areaView = buildAreaView(areaData, dashboardPath, defaultSceneSuffix, t)
+		views.push(areaView)
 
-    const userNote = visibleToUsers ? ` (${visibleToUsers.length} users)` : ''
-    console.log(`  ✓ ${area.name}${userNote}`)
-  }
+		const userNote = visibleToUsers ? ` (${visibleToUsers.length} users)` : ''
+		console.log(`  ✓ ${area.name}${userNote}`)
+	}
 
-  return { views }
-}
-
-/**
- * Create translation helper functions
- * @param {object} translator - Translator object or null
- * @returns {{ entity: Function, ui: Function, area: Function }}
- */
-function createTranslationHelpers(translator) {
-  if (translator) {
-    return {
-      entity: (entityId, originalName) => translator.tEntity(entityId, originalName),
-      ui: key => translator.tUi(key),
-      area: (areaId, originalName) => translator.tArea(areaId, originalName),
-    }
-  }
-
-  // Fallback when no translator
-  return {
-    entity: (entityId, originalName) => formatEntityName(entityId, originalName),
-    ui: key => key.split('.').pop() || key,
-    area: (areaId, originalName) => originalName || areaId,
-  }
+	return { views }
 }
 
 function buildMainView(areaDataList, dashboardName, dashboardPath, defaultSceneSuffix, config, t) {
-  const cards = []
+	const cards = []
 
-  if (config.home_card) {
-    cards.push(buildHomeCard(config.home_card))
-  }
+	if (config.home_card) {
+		cards.push(buildHomeCard(config.home_card))
+	}
 
-  if (config.presence_card) {
-    cards.push(buildPresenceCard(config.presence_card))
-  }
+	if (config.presence_card) {
+		cards.push(buildPresenceCard(config.presence_card))
+	}
 
-  cards.push({ type: 'heading', heading: t.ui('heading.areas') })
+	cards.push({ type: 'heading', heading: t.ui('heading.areas') })
 
-  for (const areaData of areaDataList) {
-    const { area, prefix, visibleToUsers } = areaData
+	for (const areaData of areaDataList) {
+		const { area, prefix, visibleToUsers } = areaData
 
-    const previewCard = buildPreviewCard(area, prefix, areaData, dashboardPath, defaultSceneSuffix, t)
-    cards.push(wrapWithUserCondition(previewCard, visibleToUsers))
-  }
+		const previewCard = buildPreviewCard(area, prefix, areaData, dashboardPath, defaultSceneSuffix, t)
+		cards.push(wrapWithUserCondition(previewCard, visibleToUsers))
+	}
 
-  return {
-    title: dashboardName,
-    path: 'home',
-    sections: [
-      {
-        type: 'grid',
-        cards,
-      },
-    ],
-  }
+	return {
+		title: dashboardName,
+		path: 'home',
+		sections: [
+			{
+				type: 'grid',
+				cards,
+			},
+		],
+	}
 }
 
 function buildHomeCard(homeCardConfig) {
-  const subButtons = (homeCardConfig.sub_buttons || []).map(btn => {
-    const subBtn = {
-      entity: btn.entity,
-    }
+	const subButtons = (homeCardConfig.sub_buttons || []).map(btn => {
+		const subBtn = {
+			entity: btn.entity,
+		}
 
-    if (btn.icon) subBtn.icon = btn.icon
-    if (btn.name) subBtn.name = btn.name
+		if (btn.icon) subBtn.icon = btn.icon
+		if (btn.name) subBtn.name = btn.name
 
-    if (btn.action === 'hold') {
-      subBtn.tap_action = { action: 'none' }
-      subBtn.hold_action = { action: 'toggle' }
-    } else {
-      subBtn.tap_action = { action: 'toggle' }
-    }
+		if (btn.action === 'hold') {
+			subBtn.tap_action = { action: 'none' }
+			subBtn.hold_action = { action: 'toggle' }
+		} else {
+			subBtn.tap_action = { action: 'toggle' }
+		}
 
-    return subBtn
-  })
+		return subBtn
+	})
 
-  return {
-    type: 'custom:bubble-card',
-    card_type: 'button',
-    button_type: 'switch',
-    entity: homeCardConfig.entity || 'sun.sun',
-    name: ' ',
-    icon: 'mdi:home-outline',
-    card_layout: 'normal',
-    rows: '2',
-    tap_action: { action: 'none' },
-    hold_action: { action: 'none' },
-    button_action: { tap_action: { action: 'none' } },
-    sub_button: subButtons,
-    styles: `
+	return {
+		type: 'custom:bubble-card',
+		card_type: 'button',
+		button_type: 'switch',
+		entity: homeCardConfig.entity || 'sun.sun',
+		name: ' ',
+		icon: 'mdi:home-outline',
+		card_layout: 'normal',
+		rows: '2',
+		tap_action: { action: 'none' },
+		hold_action: { action: 'none' },
+		button_action: { tap_action: { action: 'none' } },
+		sub_button: subButtons,
+		styles: `
       .bubble-sub-button-container {
         right: unset;
         inset-inline-end: 8px;
       }
     `,
-  }
+	}
 }
 
 function buildPresenceCard(presenceCardConfig) {
-  const subButtons = (presenceCardConfig.users || []).map(user => ({
-    entity: user.entity,
-    name: user.name,
-    icon: user.icon || 'mdi:account',
-    show_name: true,
-    show_state: false,
-    show_last_changed: false,
-  }))
+	const subButtons = (presenceCardConfig.users || []).map(user => ({
+		entity: user.entity,
+		name: user.name,
+		icon: user.icon || 'mdi:account',
+		show_name: true,
+		show_state: false,
+		show_last_changed: false,
+	}))
 
-  return {
-    type: 'custom:bubble-card',
-    card_type: 'button',
-    button_type: 'state',
-    entity: presenceCardConfig.entity || 'binary_sensor.anyone_home',
-    name: ' ',
-    icon: 'mdi:account-multiple',
-    show_name: true,
-    show_icon: true,
-    show_state: false,
-    scrolling_effect: false,
-    button_action: {},
-    sub_button: subButtons,
-    styles: `
+	return {
+		type: 'custom:bubble-card',
+		card_type: 'button',
+		button_type: 'state',
+		entity: presenceCardConfig.entity || 'binary_sensor.anyone_home',
+		name: ' ',
+		icon: 'mdi:account-multiple',
+		show_name: true,
+		show_icon: true,
+		show_state: false,
+		scrolling_effect: false,
+		button_action: {},
+		sub_button: subButtons,
+		styles: `
       .bubble-sub-button-container {
         right: unset;
         inset-inline-end: 8px;
       }
     `,
-  }
+	}
 }
 
 function buildAreaView(areaData, dashboardPath, defaultSceneSuffix, t) {
-  const { area, prefix, visibleToUsers, scenes, lights, acEntity, fanEntity, otherEntities, lightGroup } = areaData
-  const areaPath = area.id.replace(/_/g, '-')
-  const defaultScene = `scene.${prefix}${defaultSceneSuffix}`
+	const { area, prefix, visibleToUsers, scenes, lights, acEntity, fanEntity, otherEntities, lightGroup } = areaData
+	const areaPath = area.id.replace(/_/g, '-')
+	const defaultScene = `scene.${prefix}${defaultSceneSuffix}`
 
-  const cards = []
+	const cards = []
 
-  cards.push(buildHeaderCard(area, lightGroup, dashboardPath, defaultScene, t))
+	cards.push(buildHeaderCard(area, lightGroup, dashboardPath, defaultScene, t))
 
-  const defaultSceneId = `scene.${prefix}${defaultSceneSuffix}`
-  const filteredScenes = scenes.filter(s => s.entity_id !== defaultSceneId)
+	const defaultSceneId = `scene.${prefix}${defaultSceneSuffix}`
+	const filteredScenes = scenes.filter(s => s.entity_id !== defaultSceneId)
 
-  if (filteredScenes.length > 0) {
-    cards.push(buildSeparator(t.ui('section.scenes')))
-    cards.push(buildSceneGrid(filteredScenes, t))
-  }
+	if (filteredScenes.length > 0) {
+		cards.push(buildSeparator(t.ui('section.scenes')))
+		cards.push(buildSceneGrid(filteredScenes, t))
+	}
 
-  if (lights.length > 0) {
-    cards.push(buildSeparator(t.ui('section.lights')))
-    cards.push(buildLightsGrid(lights, t))
-  }
+	if (lights.length > 0) {
+		cards.push(buildSeparator(t.ui('section.lights')))
+		cards.push(buildLightsGrid(lights, t))
+	}
 
-  if (acEntity || fanEntity) {
-    cards.push(buildSeparator(t.ui('section.climate')))
-    cards.push(buildClimateCard(acEntity, fanEntity, t))
-  }
+	if (acEntity || fanEntity) {
+		cards.push(buildSeparator(t.ui('section.climate')))
+		cards.push(buildClimateCard(acEntity, fanEntity, t))
+	}
 
-  if (otherEntities.length > 0) {
-    cards.push(buildSeparator(t.ui('section.other')))
-    cards.push(buildOtherGrid(otherEntities, t))
-  }
+	if (otherEntities.length > 0) {
+		cards.push(buildSeparator(t.ui('section.other')))
+		cards.push(buildOtherGrid(otherEntities, t))
+	}
 
-  const view = {
-    icon: area.icon || 'mdi:home',
-    path: areaPath,
-    sections: [
-      {
-        type: 'grid',
-        cards,
-      },
-    ],
-  }
+	const view = {
+		icon: area.icon || 'mdi:home',
+		path: areaPath,
+		sections: [
+			{
+				type: 'grid',
+				cards,
+			},
+		],
+	}
 
-  if (visibleToUsers && visibleToUsers.length > 0) {
-    view.visible = visibleToUsers.map(userId => ({ user: userId }))
-  }
+	if (visibleToUsers && visibleToUsers.length > 0) {
+		view.visible = visibleToUsers.map(userId => ({ user: userId }))
+	}
 
-  return view
+	return view
 }
 
 function buildHeaderCard(area, lightGroup, dashboardPath, defaultScene, t) {
-  return {
-    type: 'custom:bubble-card',
-    card_type: 'button',
-    button_type: 'switch',
-    entity: lightGroup,
-    name: t.area(area.id, area.name),
-    icon: area.icon || 'mdi:home',
-    scrolling_effect: true,
-    tap_action: {
-      action: 'perform-action',
-      perform_action: 'scene.turn_on',
-      target: { entity_id: defaultScene },
-      data: {},
-    },
-    hold_action: { action: 'toggle' },
-    button_action: {
-      tap_action: { action: 'none' },
-    },
-    sub_button: [
-      {
-        icon: 'mdi:home-outline',
-        tap_action: {
-          action: 'navigate',
-          navigation_path: `/${dashboardPath}/home`,
-        },
-      },
-    ],
-    styles: `
+	return {
+		type: 'custom:bubble-card',
+		card_type: 'button',
+		button_type: 'switch',
+		entity: lightGroup,
+		name: t.area(area.id, area.name),
+		icon: area.icon || 'mdi:home',
+		scrolling_effect: true,
+		tap_action: {
+			action: 'perform-action',
+			perform_action: 'scene.turn_on',
+			target: { entity_id: defaultScene },
+			data: {},
+		},
+		hold_action: { action: 'toggle' },
+		button_action: {
+			tap_action: { action: 'none' },
+		},
+		sub_button: [
+			{
+				icon: 'mdi:home-outline',
+				tap_action: {
+					action: 'navigate',
+					navigation_path: `/${dashboardPath}/home`,
+				},
+			},
+		],
+		styles: `
       .bubble-sub-button-container {
         right: unset;
         inset-inline-end: 8px;
       }
     `,
-  }
+	}
 }
 
 function buildPreviewCard(area, prefix, areaData, dashboardPath, defaultSceneSuffix, t) {
-  const { lightGroup, acEntity, fanEntity } = areaData
-  const areaPath = area.id.replace(/_/g, '-')
-  const defaultScene = `scene.${prefix}${defaultSceneSuffix}`
+	const { lightGroup, acEntity, fanEntity } = areaData
+	const areaPath = area.id.replace(/_/g, '-')
+	const defaultScene = `scene.${prefix}${defaultSceneSuffix}`
 
-  const card = {
-    type: 'custom:bubble-card',
-    card_type: 'button',
-    button_type: 'switch',
-    entity: lightGroup,
-    name: t.area(area.id, area.name),
-    icon: area.icon || 'mdi:home',
-    scrolling_effect: true,
-    tap_action: {
-      action: 'perform-action',
-      perform_action: 'scene.turn_on',
-      target: { entity_id: defaultScene },
-      data: {},
-    },
-    hold_action: { action: 'toggle' },
-    button_action: {
-      tap_action: {
-        action: 'navigate',
-        navigation_path: `/${dashboardPath}/${areaPath}`,
-      },
-    },
-  }
+	const card = {
+		type: 'custom:bubble-card',
+		card_type: 'button',
+		button_type: 'switch',
+		entity: lightGroup,
+		name: t.area(area.id, area.name),
+		icon: area.icon || 'mdi:home',
+		scrolling_effect: true,
+		tap_action: {
+			action: 'perform-action',
+			perform_action: 'scene.turn_on',
+			target: { entity_id: defaultScene },
+			data: {},
+		},
+		hold_action: { action: 'toggle' },
+		button_action: {
+			tap_action: {
+				action: 'navigate',
+				navigation_path: `/${dashboardPath}/${areaPath}`,
+			},
+		},
+	}
 
-  const subButtons = []
+	const subButtons = []
 
-  if (acEntity) {
-    subButtons.push({
-      entity: acEntity,
-      icon: 'mdi:snowflake',
-      tap_action: { action: 'toggle' },
-    })
-  }
+	if (acEntity) {
+		subButtons.push({
+			entity: acEntity,
+			icon: 'mdi:snowflake',
+			tap_action: { action: 'toggle' },
+		})
+	}
 
-  if (fanEntity) {
-    subButtons.push({
-      entity: fanEntity,
-      tap_action: { action: 'toggle' },
-    })
-  }
+	if (fanEntity) {
+		subButtons.push({
+			entity: fanEntity,
+			tap_action: { action: 'toggle' },
+		})
+	}
 
-  if (subButtons.length > 0) {
-    card.sub_button = subButtons
-    card.styles = `
+	if (subButtons.length > 0) {
+		card.sub_button = subButtons
+		card.styles = `
       .bubble-sub-button-container {
         right: unset;
         inset-inline-end: 8px;
       }
     `
-  }
+	}
 
-  return card
-}
-
-function wrapWithUserCondition(card, visibleToUsers) {
-  if (!visibleToUsers || visibleToUsers.length === 0) return card
-
-  return {
-    type: 'conditional',
-    conditions: [
-      {
-        condition: 'user',
-        users: visibleToUsers,
-      },
-    ],
-    card,
-  }
+	return card
 }
 
 function buildSeparator(name) {
-  return {
-    type: 'custom:bubble-card',
-    card_type: 'separator',
-    name,
-  }
+	return {
+		type: 'custom:bubble-card',
+		card_type: 'separator',
+		name,
+	}
 }
 
 function buildSceneGrid(scenes, t) {
-  const cards = scenes.map(scene => ({
-    type: 'custom:bubble-card',
-    card_type: 'button',
-    button_type: 'switch',
-    entity: scene.entity_id,
-    name: t.entity(scene.entity_id, scene.name),
-    scrolling_effect: true,
-    tap_action: { action: 'toggle' },
-  }))
+	const cards = scenes.map(scene => ({
+		type: 'custom:bubble-card',
+		card_type: 'button',
+		button_type: 'switch',
+		entity: scene.entity_id,
+		name: t.entity(scene.entity_id, scene.name),
+		scrolling_effect: true,
+		tap_action: { action: 'toggle' },
+	}))
 
-  return {
-    type: 'grid',
-    square: false,
-    columns: 2,
-    cards,
-  }
+	return {
+		type: 'grid',
+		square: false,
+		columns: 2,
+		cards,
+	}
 }
 
 function buildLightsGrid(lights, t) {
-  const cards = lights.map(light => buildLightCard(light, t))
+	const cards = lights.map(light => buildLightCard(light, t))
 
-  return {
-    type: 'grid',
-    square: false,
-    columns: 2,
-    cards,
-  }
+	return {
+		type: 'grid',
+		square: false,
+		columns: 2,
+		cards,
+	}
 }
 
 function buildLightCard(light, t) {
-  const { dimmable, brightness_entity, toggle_entity, has_advanced_controls } = light
+	const { dimmable, brightness_entity, toggle_entity, has_advanced_controls } = light
 
-  const card = {
-    type: 'custom:bubble-card',
-    card_type: 'button',
-    button_type: dimmable ? 'slider' : 'switch',
-    entity: brightness_entity,
-    name: t.entity(light.entity_id, light.name),
-    scrolling_effect: true,
-  }
+	const card = {
+		type: 'custom:bubble-card',
+		card_type: 'button',
+		button_type: dimmable ? 'slider' : 'switch',
+		entity: brightness_entity,
+		name: t.entity(light.entity_id, light.name),
+		scrolling_effect: true,
+	}
 
-  const toggleAction = brightness_entity !== toggle_entity
-    ? {
-        action: 'perform-action',
-        perform_action: 'homeassistant.toggle',
-        target: { entity_id: toggle_entity },
-      }
-    : { action: 'toggle' }
+	const toggleAction = brightness_entity !== toggle_entity
+		? {
+			action: 'perform-action',
+			perform_action: 'homeassistant.toggle',
+			target: { entity_id: toggle_entity },
+		}
+		: { action: 'toggle' }
 
-  if (dimmable) {
-    card.tap_action = toggleAction
-    card.button_action = { tap_action: { action: 'none' } }
+	if (dimmable) {
+		card.tap_action = toggleAction
+		card.button_action = { tap_action: { action: 'none' } }
 
-    if (has_advanced_controls) {
-      card.double_tap_action = { action: 'more-info' }
-    }
-  } else {
-    card.tap_action = toggleAction
+		if (has_advanced_controls) {
+			card.double_tap_action = { action: 'more-info' }
+		}
+	} else {
+		card.tap_action = toggleAction
 
-    if (has_advanced_controls) {
-      card.hold_action = { action: 'more-info' }
-    }
-  }
+		if (has_advanced_controls) {
+			card.hold_action = { action: 'more-info' }
+		}
+	}
 
-  return card
+	return card
 }
 
 function buildClimateCard(acEntity, fanEntity, t) {
-  const card = {
-    type: 'custom:bubble-card',
-    card_type: 'climate',
-    entity: acEntity,
-    name: t.ui('climate.ac'),
-    min_temp: 16,
-    max_temp: 30,
-    step: 1,
-    tap_action: { action: 'toggle' },
-  }
+	const card = {
+		type: 'custom:bubble-card',
+		card_type: 'climate',
+		entity: acEntity,
+		name: t.ui('climate.ac'),
+		min_temp: 16,
+		max_temp: 30,
+		step: 1,
+		tap_action: { action: 'toggle' },
+	}
 
-  const subButtons = []
+	const subButtons = []
 
-  if (fanEntity) {
-    subButtons.push({
-      entity: fanEntity,
-      tap_action: { action: 'toggle' },
-    })
-  }
+	if (fanEntity) {
+		subButtons.push({
+			entity: fanEntity,
+			tap_action: { action: 'toggle' },
+		})
+	}
 
-  if (acEntity) {
-    subButtons.push({
-      entity: acEntity,
-      icon: 'mdi:chevron-down',
-      select_attribute: 'hvac_modes',
-      show_arrow: false,
-    })
-  }
+	if (acEntity) {
+		subButtons.push({
+			entity: acEntity,
+			icon: 'mdi:chevron-down',
+			select_attribute: 'hvac_modes',
+			show_arrow: false,
+		})
+	}
 
-  if (subButtons.length > 0) {
-    card.sub_button = subButtons
-    card.styles = `
+	if (subButtons.length > 0) {
+		card.sub_button = subButtons
+		card.styles = `
       .bubble-sub-button-container {
         right: unset;
         inset-inline-end: 8px;
       }
     `
-  }
+	}
 
-  return card
+	return card
 }
 
 function buildOtherGrid(entities, t) {
-  const cards = entities.map(entity => ({
-    type: 'custom:bubble-card',
-    card_type: 'button',
-    button_type: 'switch',
-    entity: entity.entity_id,
-    name: t.entity(entity.entity_id, entity.name),
-    scrolling_effect: true,
-    tap_action: { action: 'toggle' },
-  }))
+	const cards = entities.map(entity => ({
+		type: 'custom:bubble-card',
+		card_type: 'button',
+		button_type: 'switch',
+		entity: entity.entity_id,
+		name: t.entity(entity.entity_id, entity.name),
+		scrolling_effect: true,
+		tap_action: { action: 'toggle' },
+	}))
 
-  return {
-    type: 'grid',
-    square: false,
-    columns: 2,
-    cards,
-  }
+	return {
+		type: 'grid',
+		square: false,
+		columns: 2,
+		cards,
+	}
 }
 
-const SCENE_DISPLAY_NAMES = {
-  standard: 'Standard',
-  minimal: 'Minimal',
-}
-
-function formatEntityName(entityId, name) {
-  const parts = entityId.split('.')
-  const id = parts[1] || entityId
-
-  if (parts[0] === 'scene') {
-    for (const [suffix, displayName] of Object.entries(SCENE_DISPLAY_NAMES)) {
-      if (id.endsWith(`_${suffix}`)) return displayName
-    }
-  }
-
-  if (name && name !== id) return name
-
-  const withoutPrefix = id.replace(/^[a-z]+_/, '')
-
-  return withoutPrefix
-    .split('_')
-    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(' ')
-}

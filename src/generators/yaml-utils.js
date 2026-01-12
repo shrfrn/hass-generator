@@ -1,3 +1,4 @@
+// @ts-check
 import { writeFile, mkdir } from 'fs/promises'
 import { dirname } from 'path'
 
@@ -5,155 +6,155 @@ import { dirname } from 'path'
 // Avoids external dependencies and handles HA-specific formatting
 
 export async function writeYamlFile(filePath, content, header = '') {
-  await mkdir(dirname(filePath), { recursive: true, })
+	await mkdir(dirname(filePath), { recursive: true })
 
-  const yaml = header + serializeToYaml(content, 0, true)
-  await writeFile(filePath, yaml, 'utf-8')
+	const yaml = header + serializeToYaml(content, 0, true)
+	await writeFile(filePath, yaml, 'utf-8')
 }
 
 export function serializeToYaml(obj, indent = 0, addSectionSpacing = false) {
-  const spaces = '  '.repeat(indent)
-  let result = ''
-  let isFirst = true
+	const spaces = '  '.repeat(indent)
+	let result = ''
+	let isFirst = true
 
-  for (const [key, value] of Object.entries(obj)) {
-    if (value === null || value === undefined) continue
+	for (const [key, value] of Object.entries(obj)) {
+		if (value === null || value === undefined) continue
 
-    // Add blank line between top-level sections
-    if (addSectionSpacing && !isFirst) {
-      result += '\n'
-    }
+		// Add blank line between top-level sections
+		if (addSectionSpacing && !isFirst) {
+			result += '\n'
+		}
 
-    isFirst = false
-    result += `${spaces}${key}:`
+		isFirst = false
+		result += `${spaces}${key}:`
 
-    if (typeof value === 'string') {
-      result += ` ${formatYamlString(value)}\n`
-    } else if (typeof value === 'number' || typeof value === 'boolean') {
-      result += ` ${value}\n`
-    } else if (Array.isArray(value)) {
-      result += '\n' + serializeYamlArray(value, indent + 1)
-    } else if (typeof value === 'object') {
-      result += '\n' + serializeToYaml(value, indent + 1, false)
-    }
-  }
+		if (typeof value === 'string') {
+			result += ` ${formatYamlString(value)}\n`
+		} else if (typeof value === 'number' || typeof value === 'boolean') {
+			result += ` ${value}\n`
+		} else if (Array.isArray(value)) {
+			result += '\n' + serializeYamlArray(value, indent + 1)
+		} else if (typeof value === 'object') {
+			result += '\n' + serializeToYaml(value, indent + 1, false)
+		}
+	}
 
-  return result
+	return result
 }
 
 function serializeYamlArray(arr, indent) {
-  const spaces = '  '.repeat(indent)
-  let result = ''
+	const spaces = '  '.repeat(indent)
+	let result = ''
 
-  for (const item of arr) {
-    if (typeof item === 'string') {
-      result += `${spaces}- ${formatYamlString(item)}\n`
-    } else if (typeof item === 'object' && !Array.isArray(item)) {
-      // Object in array - use block style
-      const entries = Object.entries(item)
+	for (const item of arr) {
+		if (typeof item === 'string') {
+			result += `${spaces}- ${formatYamlString(item)}\n`
+		} else if (typeof item === 'object' && !Array.isArray(item)) {
+			// Object in array - use block style
+			const entries = Object.entries(item)
 
-      if (entries.length > 0) {
-        const [firstKey, firstValue] = entries[0]
-        result += `${spaces}- ${firstKey}:`
+			if (entries.length > 0) {
+				const [firstKey, firstValue] = entries[0]
+				result += `${spaces}- ${firstKey}:`
 
-        if (typeof firstValue === 'object' && !Array.isArray(firstValue)) {
-          result += '\n' + serializeToYaml(firstValue, indent + 2, false)
-        } else if (Array.isArray(firstValue)) {
-          result += '\n' + serializeYamlArray(firstValue, indent + 2)
-        } else {
-          result += ` ${formatYamlValue(firstValue)}\n`
-        }
+				if (typeof firstValue === 'object' && !Array.isArray(firstValue)) {
+					result += '\n' + serializeToYaml(firstValue, indent + 2, false)
+				} else if (Array.isArray(firstValue)) {
+					result += '\n' + serializeYamlArray(firstValue, indent + 2)
+				} else {
+					result += ` ${formatYamlValue(firstValue)}\n`
+				}
 
-        // Remaining entries at same indent as first key
-        for (let i = 1; i < entries.length; i++) {
-          const [key, value] = entries[i]
-          result += `${spaces}  ${key}:`
+				// Remaining entries at same indent as first key
+				for (let i = 1; i < entries.length; i++) {
+					const [key, value] = entries[i]
+					result += `${spaces}  ${key}:`
 
-          if (typeof value === 'object' && !Array.isArray(value)) {
-            result += '\n' + serializeToYaml(value, indent + 2, false)
-          } else if (Array.isArray(value)) {
-            result += '\n' + serializeYamlArray(value, indent + 2)
-          } else {
-            result += ` ${formatYamlValue(value)}\n`
-          }
-        }
-      }
-    } else {
-      result += `${spaces}- ${item}\n`
-    }
-  }
+					if (typeof value === 'object' && !Array.isArray(value)) {
+						result += '\n' + serializeToYaml(value, indent + 2, false)
+					} else if (Array.isArray(value)) {
+						result += '\n' + serializeYamlArray(value, indent + 2)
+					} else {
+						result += ` ${formatYamlValue(value)}\n`
+					}
+				}
+			}
+		} else {
+			result += `${spaces}- ${item}\n`
+		}
+	}
 
-  return result
+	return result
 }
 
 function formatYamlString(str) {
-  // Multi-line strings use literal block scalar
-  if (str.includes('\n')) {
-    const lines = str.split('\n')
-    return '>\n' + lines.map(line => '  ' + line).join('\n')
-  }
+	// Multi-line strings use literal block scalar
+	if (str.includes('\n')) {
+		const lines = str.split('\n')
+		return '>\n' + lines.map(line => '  ' + line).join('\n')
+	}
 
-  // Strings that need quoting
-  if (needsQuoting(str)) {
-    return `"${str.replace(/"/g, '\\"')}"`
-  }
+	// Strings that need quoting
+	if (needsQuoting(str)) {
+		return `"${str.replace(/"/g, '\\"')}"`
+	}
 
-  return str
+	return str
 }
 
 function formatYamlValue(value) {
-  if (typeof value === 'string') return formatYamlString(value)
-  return value
+	if (typeof value === 'string') return formatYamlString(value)
+	return value
 }
 
 function needsQuoting(str) {
-  // Quote if contains special chars or looks like other types
-  if (str === '') return true
-  if (str === 'true' || str === 'false') return true
-  if (str === 'null' || str === 'none') return true
+	// Quote if contains special chars or looks like other types
+	if (str === '') return true
+	if (str === 'true' || str === 'false') return true
+	if (str === 'null' || str === 'none') return true
 
-  // YAML boolean literals (on/off/yes/no) - must be quoted
-  const lowerStr = str.toLowerCase()
-  if (lowerStr === 'on' || lowerStr === 'off') return true
-  if (lowerStr === 'yes' || lowerStr === 'no') return true
+	// YAML boolean literals (on/off/yes/no) - must be quoted
+	const lowerStr = str.toLowerCase()
+	if (lowerStr === 'on' || lowerStr === 'off') return true
+	if (lowerStr === 'yes' || lowerStr === 'no') return true
 
-  if (/^[0-9]/.test(str) && !str.includes('.')) return true
-  if (/[:#\[\]{}|>&*!?]/.test(str)) return true
-  if (str.startsWith(' ') || str.endsWith(' ')) return true
+	if (/^[0-9]/.test(str) && !str.includes('.')) return true
+	if (/[:#[\]{}|>&*!?]/.test(str)) return true
+	if (str.startsWith(' ') || str.endsWith(' ')) return true
 
-  return false
+	return false
 }
 
 export function generateHeader(areaName, prefix, includeExcludeInfo = {}) {
-  const { included = [], excluded = [], } = includeExcludeInfo
+	const { included = [], excluded = [] } = includeExcludeInfo
 
-  let header = `# Auto-generated by hass-data-generator
+	let header = `# Auto-generated by hass-data-generator
 # Area: ${areaName} (${prefix})
 # Do not edit manually - changes will be overwritten
 `
 
-  if (included.length > 0) {
-    header += `#\n# Included in light group:\n`
+	if (included.length > 0) {
+		header += '#\n# Included in light group:\n'
 
-    for (const entity of included) {
-      header += `#   + ${entity}\n`
-    }
-  }
+		for (const entity of included) {
+			header += `#   + ${entity}\n`
+		}
+	}
 
-  if (excluded.length > 0) {
-    header += `#\n# Excluded from light group:\n`
+	if (excluded.length > 0) {
+		header += '#\n# Excluded from light group:\n'
 
-    for (const entity of excluded) {
-      header += `#   - ${entity}\n`
-    }
-  }
+		for (const entity of excluded) {
+			header += `#   - ${entity}\n`
+		}
+	}
 
-  header += '\n'
-  return header
+	header += '\n'
+	return header
 }
 
 export function generateFloorHeader(floorName) {
-  return `# Auto-generated by hass-data-generator
+	return `# Auto-generated by hass-data-generator
 # Floor: ${floorName}
 # Do not edit manually - changes will be overwritten
 
@@ -161,7 +162,7 @@ export function generateFloorHeader(floorName) {
 }
 
 export function generateLabelHeader(labelName) {
-  return `# Auto-generated by hass-data-generator
+	return `# Auto-generated by hass-data-generator
 # Label: ${labelName}
 # Do not edit manually - changes will be overwritten
 

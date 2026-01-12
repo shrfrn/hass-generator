@@ -1,11 +1,12 @@
+// @ts-check
 // Dashboard template registry and loader
 
 const TEMPLATES = {
-  bubble: () => import('./bubble/renderer.js'),
-  'bubble-views': () => import('./bubble-views/renderer.js'),
-  // Future templates:
-  // mushroom: () => import('./mushroom/renderer.js'),
-  // minimal: () => import('./minimal/renderer.js'),
+	bubble: () => import('./bubble/renderer.js'),
+	'bubble-views': () => import('./bubble-views/renderer.js'),
+	// Future templates:
+	// mushroom: () => import('./mushroom/renderer.js'),
+	// minimal: () => import('./minimal/renderer.js'),
 }
 
 /**
@@ -13,7 +14,7 @@ const TEMPLATES = {
  * @returns {string[]}
  */
 export function getAvailableTemplates() {
-  return Object.keys(TEMPLATES)
+	return Object.keys(TEMPLATES)
 }
 
 /**
@@ -22,13 +23,13 @@ export function getAvailableTemplates() {
  * @returns {Promise<{ render: Function }>}
  */
 export async function loadTemplate(templateName) {
-  const loader = TEMPLATES[templateName]
+	const loader = TEMPLATES[templateName]
 
-  if (!loader) {
-    const available = getAvailableTemplates().join(', ')
-    throw new Error(`Unknown dashboard template: '${templateName}'. Available: ${available}`)
-  }
+	if (!loader) {
+		const available = getAvailableTemplates().join(', ')
+		throw new Error(`Unknown dashboard template: '${templateName}'. Available: ${available}`)
+	}
 
-  return loader()
+	return loader()
 }
 

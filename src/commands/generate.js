@@ -1,8 +1,9 @@
 // @ts-check
-import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'fs'
-import { join, basename } from 'path'
+import { existsSync, readFileSync, readdirSync, writeFileSync } from 'fs'
+import { join } from 'path'
 import YAML from 'yaml'
 import { paths } from '../paths.js'
+import { ensureDir } from '../utils/fs.js'
 import { generateAreaPackages } from '../generators/area-package.js'
 import { generateLabelPackages } from '../generators/label-package.js'
 import { generateHomePackage } from '../generators/home-package.js'
@@ -12,151 +13,195 @@ import { generateDashboard } from '../generators/dashboard/index.js'
 import { createTranslator } from '../i18n/index.js'
 
 /**
+ * Main generate command - orchestrates YAML and dashboard generation
  * @param {{ dryRun?: boolean, force?: boolean, yamlOnly?: boolean, dashboardOnly?: boolean, dashboard?: string, lang?: string }} options
  */
 export async function generate(options = {}) {
-  const { dryRun, force, yamlOnly, dashboardOnly, dashboard, lang } = options
+	const { dryRun, yamlOnly, dashboardOnly, dashboard, lang } = options
 
-  // Check for required files
-  if (!existsSync(paths.generatorConfig())) {
-    console.error('❌ generator.config.js not found. Run "hass-gen init" first.')
-    process.exit(1)
-  }
+	// Check for required files
+	if (!existsSync(paths.generatorConfig())) {
+		console.error('❌ generator.config.js not found. Run "hass-gen init" first.')
+		process.exit(1)
+	}
 
-  if (!existsSync(paths.hassData())) {
-    console.error('❌ inventory/hass-data.json not found. Run "hass-gen inventory" first.')
-    process.exit(1)
-  }
+	if (!existsSync(paths.hassData())) {
+		console.error('❌ inventory/hass-data.json not found. Run "hass-gen inventory" first.')
+		process.exit(1)
+	}
 
-  console.log('⚙️  Generating...')
+	console.log('⚙️  Generating...')
+	if (dryRun) console.log('   (dry-run mode - no files will be written)\n')
 
-  if (dryRun) {
-    console.log('   (dry-run mode - no files will be written)\n')
-  }
+	// Load inventory and config
+	const inventory = JSON.parse(readFileSync(paths.hassData(), 'utf-8'))
+	const configModule = await import(paths.generatorConfig())
+	const config = configModule.default
 
-  // Load inventory data
-  const inventory = JSON.parse(readFileSync(paths.hassData(), 'utf-8'))
+	// Validate schema version
+	if (!config.schemaVersion) {
+		console.warn('⚠️  Warning: generator.config.js missing schemaVersion')
+		console.warn('   Add "schemaVersion: 1" to your config for future compatibility\n')
+	}
 
-  // Load generator config (for YAML packages)
-  const configModule = await import(paths.generatorConfig())
-  const config = configModule.default
+	/** @type {{ yaml: string[], dashboards: string[] }} */
+	const results = { yaml: [], dashboards: [] }
 
-  // Validate schema version
-  if (!config.schemaVersion) {
-    console.warn('⚠️  Warning: generator.config.js missing schemaVersion')
-    console.warn('   Add "schemaVersion: 1" to your config for future compatibility\n')
-  }
+	// Generate YAML packages
+	if (!dashboardOnly) {
+		results.yaml = await generateYamlPackages(inventory, config)
+	}
 
-  /** @type {{ yaml: string[], dashboards: string[] }} */
-  const results = { yaml: [], dashboards: [] }
+	// Generate dashboards
+	if (!yamlOnly) {
+		const dashboardResults = await generateAllDashboards(inventory, config, { dashboard, lang, dryRun })
+		results.dashboards = dashboardResults.files
+	}
 
-  // Generate YAML packages
-  if (!dashboardOnly) {
-    console.log('\n📄 Generating YAML packages...')
+	if (dryRun) {
+		console.log('\n📋 Diff preview:')
+		console.log('   (diff implementation pending)')
+	}
 
-    ensureDir(paths.packages())
-    ensureDir(paths.packagesAreas())
-    ensureDir(paths.packagesLabels())
-    ensureDir(paths.packagesSceneTemplates())
+	console.log('\n✨ Generation complete!')
+}
 
-    const areaFiles = await generateAreaPackages(inventory, config, paths.packages())
-    results.yaml.push(...areaFiles)
+/**
+ * Generate all YAML packages (area, label, home, scene templates, users)
+ * @param {object} inventory - HASS inventory data
+ * @param {object} config - Generator config
+ * @returns {Promise<string[]>} List of generated file paths
+ */
+async function generateYamlPackages(inventory, config) {
+	console.log('\n📄 Generating YAML packages...')
 
-    const labelFiles = await generateLabelPackages(inventory, paths.packages())
-    results.yaml.push(...labelFiles)
+	ensureDir(paths.packages())
+	ensureDir(paths.packagesAreas())
+	ensureDir(paths.packagesLabels())
+	ensureDir(paths.packagesSceneTemplates())
 
-    const homeFiles = await generateHomePackage(inventory, paths.packages())
-    results.yaml.push(...homeFiles)
+	const files = []
 
-    // Scene templates (not included in index.yaml - for manual use only)
-    await generateSceneTemplates(inventory, config, paths.packages())
+	const areaFiles = await generateAreaPackages(inventory, config, paths.packages())
+	files.push(...areaFiles)
 
-    // Users file (syncs USERS from inventory, preserves manual groups)
-    await generateUsersFile(inventory)
+	const labelFiles = await generateLabelPackages(inventory, paths.packages())
+	files.push(...labelFiles)
 
-    // Generate index.yaml
-    generatePackageIndex(paths.packages(), results.yaml)
+	const homeFiles = await generateHomePackage(inventory, paths.packages())
+	files.push(...homeFiles)
 
-    console.log(`\n   Generated ${results.yaml.length} YAML files`)
-  }
+	// Scene templates (not included in index.yaml - for manual use only)
+	await generateSceneTemplates(inventory, config, paths.packages())
 
-  // Generate dashboards
-  const dashboardRegistrations = []
+	// Users file (syncs USERS from inventory, preserves manual groups)
+	await generateUsersFile(inventory)
 
-  if (!yamlOnly) {
-    const dashboardConfigs = await discoverDashboards(dashboard)
+	// Generate index.yaml
+	generatePackageIndex(paths.packages(), files)
 
-    if (dashboardConfigs.length === 0) {
-      console.log('\n⚠️  No dashboard configs found in dashboards/ folder')
-      console.log('   Create dashboards/main.config.js to generate a dashboard')
-    } else {
-      ensureDir(paths.lovelace())
+	console.log(`\n   Generated ${files.length} YAML files`)
 
-      for (const { name, configPath } of dashboardConfigs) {
-        const dashboardModule = await import(configPath)
-        const dashboardConfig = dashboardModule.default
+	return files
+}
 
-        if (!dashboardConfig.template) {
-          console.error(`\n❌ Dashboard '${name}' missing 'template' field`)
-          continue
-        }
+/**
+ * Generate all configured dashboards
+ * @param {object} inventory - HASS inventory data
+ * @param {object} config - Generator config
+ * @param {{ dashboard?: string, lang?: string, dryRun?: boolean }} options
+ * @returns {Promise<{ files: string[], registrations: object[] }>}
+ */
+async function generateAllDashboards(inventory, config, options) {
+	const { dashboard, lang, dryRun } = options
+	const dashboardConfigs = await discoverDashboards(dashboard)
 
-        // Determine which language variants to generate
-        const languageVariants = getLanguageVariants(dashboardConfig, lang)
+	if (dashboardConfigs.length === 0) {
+		console.log('\n⚠️  No dashboard configs found in dashboards/ folder')
+		console.log('   Create dashboards/main.config.js to generate a dashboard')
+		return { files: [], registrations: [] }
+	}
 
-        for (const variant of languageVariants) {
-          const translator = createTranslator(variant.lang)
+	ensureDir(paths.lovelace())
 
-          // Merge variant props into config
-          const variantConfig = { ...dashboardConfig, ...variant }
+	const files = []
+	const registrations = []
 
-          const dashboardYaml = await generateDashboard(inventory, variantConfig, config, translator)
+	for (const { name, configPath } of dashboardConfigs) {
+		const dashboardModule = await import(configPath)
+		const dashboardConfig = dashboardModule.default
 
-          // Determine output path (use variant output or add lang suffix)
-          const outputPath = variant.output
-            ? join(process.cwd(), variant.output)
-            : dashboardConfig.output
-              ? join(process.cwd(), addLangSuffix(dashboardConfig.output, variant.lang, languageVariants.length > 1))
-              : join(paths.lovelace(), `${name}${languageVariants.length > 1 ? `-${variant.lang}` : ''}.yaml`)
+		if (!dashboardConfig.template) {
+			console.error(`\n❌ Dashboard '${name}' missing 'template' field`)
+			continue
+		}
 
-          const outputRelative = variant.output
-            || (languageVariants.length > 1 ? addLangSuffix(dashboardConfig.output || `lovelace/${name}.yaml`, variant.lang, true) : dashboardConfig.output || `lovelace/${name}.yaml`)
+		const result = await generateSingleDashboard(name, dashboardConfig, inventory, config, { lang, dryRun })
+		files.push(...result.files)
+		registrations.push(...result.registrations)
+	}
 
-          if (!dryRun) {
-            ensureDir(join(outputPath, '..'))
-            writeFileSync(outputPath, YAML.stringify(dashboardYaml))
-            console.log(`   📝 Written to ${outputRelative}`)
-          }
+	// Update configuration.yaml with dashboard registrations
+	if (!dryRun && registrations.length > 0) {
+		updateConfigurationYaml(registrations)
+	}
 
-          results.dashboards.push(`${name}${languageVariants.length > 1 ? `-${variant.lang}` : ''}`)
+	return { files, registrations }
+}
 
-          // Collect registration info for configuration.yaml update
-          const regPath = variant.dashboard_path || dashboardConfig.dashboard_path
-          if (regPath) {
-            dashboardRegistrations.push({
-              path: regPath,
-              title: variant.dashboard_title || dashboardConfig.dashboard_title || dashboardConfig.dashboard_name || name,
-              icon: variant.dashboard_icon || dashboardConfig.dashboard_icon || 'mdi:view-dashboard',
-              show_in_sidebar: (variant.show_in_sidebar ?? dashboardConfig.show_in_sidebar) !== false,
-              filename: outputRelative,
-            })
-          }
-        }
-      }
+/**
+ * Generate a single dashboard with all its language variants
+ * @param {string} name - Dashboard name
+ * @param {object} dashboardConfig - Dashboard configuration
+ * @param {object} inventory - HASS inventory data
+ * @param {object} config - Generator config
+ * @param {{ lang?: string, dryRun?: boolean }} options
+ * @returns {Promise<{ files: string[], registrations: object[] }>}
+ */
+async function generateSingleDashboard(name, dashboardConfig, inventory, config, options) {
+	const { lang, dryRun } = options
+	const languageVariants = getLanguageVariants(dashboardConfig, lang)
 
-      // Update configuration.yaml with dashboard registrations
-      if (!dryRun && dashboardRegistrations.length > 0) {
-        updateConfigurationYaml(dashboardRegistrations)
-      }
-    }
-  }
+	const files = []
+	const registrations = []
 
-  if (dryRun) {
-    console.log('\n📋 Diff preview:')
-    console.log('   (diff implementation pending)')
-  }
+	for (const variant of languageVariants) {
+		const translator = createTranslator(variant.lang)
+		const variantConfig = { ...dashboardConfig, ...variant }
+		const dashboardYaml = await generateDashboard(inventory, variantConfig, config, translator)
 
-  console.log('\n✨ Generation complete!')
+		// Determine output path
+		const outputPath = variant.output
+			? join(process.cwd(), variant.output)
+			: dashboardConfig.output
+				? join(process.cwd(), addLangSuffix(dashboardConfig.output, variant.lang, languageVariants.length > 1))
+				: join(paths.lovelace(), `${name}${languageVariants.length > 1 ? `-${variant.lang}` : ''}.yaml`)
+
+		const outputRelative = variant.output
+			|| (languageVariants.length > 1 ? addLangSuffix(dashboardConfig.output || `lovelace/${name}.yaml`, variant.lang, true) : dashboardConfig.output || `lovelace/${name}.yaml`)
+
+		if (!dryRun) {
+			ensureDir(join(outputPath, '..'))
+			writeFileSync(outputPath, YAML.stringify(dashboardYaml))
+			console.log(`   📝 Written to ${outputRelative}`)
+		}
+
+		files.push(`${name}${languageVariants.length > 1 ? `-${variant.lang}` : ''}`)
+
+		// Collect registration info
+		const regPath = variant.dashboard_path || dashboardConfig.dashboard_path
+		if (regPath) {
+			registrations.push({
+				path: regPath,
+				title: variant.dashboard_title || dashboardConfig.dashboard_title || dashboardConfig.dashboard_name || name,
+				icon: variant.dashboard_icon || dashboardConfig.dashboard_icon || 'mdi:view-dashboard',
+				show_in_sidebar: (variant.show_in_sidebar ?? dashboardConfig.show_in_sidebar) !== false,
+				filename: outputRelative,
+			})
+		}
+	}
+
+	return { files, registrations }
 }
 
 /**
@@ -165,39 +210,26 @@ export async function generate(options = {}) {
  * @returns {Promise<Array<{ name: string, configPath: string }>>}
  */
 async function discoverDashboards(filterName) {
-  const dashboardsDir = paths.dashboards()
+	const dashboardsDir = paths.dashboards()
+	if (!existsSync(dashboardsDir)) return []
 
-  if (!existsSync(dashboardsDir)) {
-    return []
-  }
+	const files = readdirSync(dashboardsDir)
+	const configs = []
 
-  const files = readdirSync(dashboardsDir)
-  const configs = []
+	for (const file of files) {
+		if (!file.endsWith('.config.js')) continue
 
-  for (const file of files) {
-    if (!file.endsWith('.config.js')) continue
+		const name = file.replace('.config.js', '')
 
-    const name = file.replace('.config.js', '')
+		if (filterName) {
+			const requestedNames = filterName.split(',').map(n => n.trim())
+			if (!requestedNames.includes(name)) continue
+		}
 
-    // Filter if specific dashboard requested
-    if (filterName) {
-      const requestedNames = filterName.split(',').map(n => n.trim())
-      if (!requestedNames.includes(name)) continue
-    }
+		configs.push({ name, configPath: join(dashboardsDir, file) })
+	}
 
-    configs.push({
-      name,
-      configPath: join(dashboardsDir, file),
-    })
-  }
-
-  return configs
-}
-
-function ensureDir(dir) {
-  if (!existsSync(dir)) {
-    mkdirSync(dir, { recursive: true })
-  }
+	return configs
 }
 
 /**
@@ -207,31 +239,28 @@ function ensureDir(dir) {
  * @returns {Array<{ lang: string, [key: string]: any }>}
  */
 function getLanguageVariants(dashboardConfig, langFlag) {
-  const { languages } = dashboardConfig
+	const { languages } = dashboardConfig
 
-  // If no languages array, use single-language mode
-  if (!languages || languages.length === 0) {
-    const lang = langFlag || dashboardConfig.language || 'en'
-    return [{ lang }]
-  }
+	// If no languages array, use single-language mode
+	if (!languages || languages.length === 0) {
+		const lang = langFlag || dashboardConfig.language || 'en'
+		return [{ lang }]
+	}
 
-  // --lang all generates all variants
-  if (langFlag === 'all') {
-    return languages
-  }
+	// --lang all generates all variants
+	if (langFlag === 'all') return languages
 
-  // --lang <code> filters to specific language
-  if (langFlag) {
-    const variant = languages.find(v => v.lang === langFlag)
-    if (variant) return [variant]
+	// --lang <code> filters to specific language
+	if (langFlag) {
+		const variant = languages.find(v => v.lang === langFlag)
+		if (variant) return [variant]
 
-    // Fall back to using langFlag with base config
-    console.warn(`   ⚠ Language '${langFlag}' not in config.languages, using base config`)
-    return [{ lang: langFlag }]
-  }
+		console.warn(`   ⚠ Language '${langFlag}' not in config.languages, using base config`)
+		return [{ lang: langFlag }]
+	}
 
-  // No flag - generate all variants
-  return languages
+	// No flag - generate all variants
+	return languages
 }
 
 /**
@@ -242,12 +271,12 @@ function getLanguageVariants(dashboardConfig, langFlag) {
  * @returns {string}
  */
 function addLangSuffix(outputPath, lang, addSuffix) {
-  if (!addSuffix) return outputPath
+	if (!addSuffix) return outputPath
 
-  const lastDot = outputPath.lastIndexOf('.')
-  if (lastDot === -1) return `${outputPath}-${lang}`
+	const lastDot = outputPath.lastIndexOf('.')
+	if (lastDot === -1) return `${outputPath}-${lang}`
 
-  return `${outputPath.slice(0, lastDot)}-${lang}${outputPath.slice(lastDot)}`
+	return `${outputPath.slice(0, lastDot)}-${lang}${outputPath.slice(lastDot)}`
 }
 
 /**
@@ -256,47 +285,46 @@ function addLangSuffix(outputPath, lang, addSuffix) {
  * @param {string[]} generatedFiles - List of generated package files
  */
 function generatePackageIndex(packagesDir, generatedFiles) {
-  const indexPath = join(packagesDir, 'index.yaml')
-  const manualEntries = extractManualEntries(indexPath)
+	const indexPath = join(packagesDir, 'index.yaml')
+	const manualEntries = extractManualEntries(indexPath)
 
-  const lines = [
-    '# ============================================================',
-    '# Package Index - Auto-managed by hass-gen',
-    '# ============================================================',
-    '# DO NOT edit the auto-generated section below.',
-    '# Add manual packages in the section marked "Manual packages".',
-    '# ============================================================',
-    '',
-    '# ------------------------------------------------------------',
-    '# Manual packages (add your custom packages here)',
-    '# ------------------------------------------------------------',
-  ]
+	const lines = [
+		'# ============================================================',
+		'# Package Index - Auto-managed by hass-gen',
+		'# ============================================================',
+		'# DO NOT edit the auto-generated section below.',
+		'# Add manual packages in the section marked "Manual packages".',
+		'# ============================================================',
+		'',
+		'# ------------------------------------------------------------',
+		'# Manual packages (add your custom packages here)',
+		'# ------------------------------------------------------------',
+	]
 
-  // Add manual entries
-  for (const entry of manualEntries) {
-    lines.push(entry)
-  }
+	for (const entry of manualEntries) {
+		lines.push(entry)
+	}
 
-  if (manualEntries.length === 0) {
-    lines.push('# example: my_package: !include my_package.yaml')
-  }
+	if (manualEntries.length === 0) {
+		lines.push('# example: my_package: !include my_package.yaml')
+	}
 
-  lines.push('')
-  lines.push('# ------------------------------------------------------------')
-  lines.push('# Auto-generated packages (DO NOT EDIT below this line)')
-  lines.push('# ------------------------------------------------------------')
+	lines.push('')
+	lines.push('# ------------------------------------------------------------')
+	lines.push('# Auto-generated packages (DO NOT EDIT below this line)')
+	lines.push('# ------------------------------------------------------------')
 
-  const sortedFiles = [...generatedFiles].sort()
+	const sortedFiles = [...generatedFiles].sort()
 
-  for (const file of sortedFiles) {
-    const key = file.replace(/\//g, '_').replace('.yaml', '')
-    lines.push(`${key}: !include ${file}`)
-  }
+	for (const file of sortedFiles) {
+		const key = file.replace(/\//g, '_').replace('.yaml', '')
+		lines.push(`${key}: !include ${file}`)
+	}
 
-  lines.push('')
+	lines.push('')
 
-  writeFileSync(indexPath, lines.join('\n'))
-  console.log('\n  ✓ index.yaml')
+	writeFileSync(indexPath, lines.join('\n'))
+	console.log('\n  ✓ index.yaml')
 }
 
 /**
@@ -305,36 +333,34 @@ function generatePackageIndex(packagesDir, generatedFiles) {
  * @returns {string[]} Array of manual entry lines
  */
 function extractManualEntries(indexPath) {
-  if (!existsSync(indexPath)) return []
+	if (!existsSync(indexPath)) return []
 
-  const content = readFileSync(indexPath, 'utf-8')
-  const lines = content.split('\n')
-  const manualEntries = []
+	const content = readFileSync(indexPath, 'utf-8')
+	const lines = content.split('\n')
+	const manualEntries = []
+	let inManualSection = false
 
-  let inManualSection = false
+	for (const line of lines) {
+		if (line.includes('Manual packages')) {
+			inManualSection = true
+			continue
+		}
 
-  for (const line of lines) {
-    if (line.includes('Manual packages')) {
-      inManualSection = true
-      continue
-    }
+		if (line.includes('Auto-generated')) {
+			inManualSection = false
+			continue
+		}
 
-    if (line.includes('Auto-generated')) {
-      inManualSection = false
-      continue
-    }
+		const trimmed = line.trim()
+		const isComment = trimmed.startsWith('#')
+		const isDivider = trimmed.startsWith('# ---') || trimmed.startsWith('# ===')
 
-    // Skip comments, dividers, and empty lines
-    const trimmed = line.trim()
-    const isComment = trimmed.startsWith('#')
-    const isDivider = trimmed.startsWith('# ---') || trimmed.startsWith('# ===')
+		if (inManualSection && trimmed && !isComment && !isDivider) {
+			manualEntries.push(line)
+		}
+	}
 
-    if (inManualSection && trimmed && !isComment && !isDivider) {
-      manualEntries.push(line)
-    }
-  }
-
-  return manualEntries
+	return manualEntries
 }
 
 /**
@@ -342,46 +368,39 @@ function extractManualEntries(indexPath) {
  * @param {Array<{ path: string, title: string, icon: string, show_in_sidebar: boolean, filename: string }>} registrations
  */
 function updateConfigurationYaml(registrations) {
-  const configPath = join(process.cwd(), 'configuration.yaml')
+	const configPath = join(process.cwd(), 'configuration.yaml')
 
-  if (!existsSync(configPath)) {
-    console.warn('\n⚠️  configuration.yaml not found, skipping dashboard registration')
-    return
-  }
+	if (!existsSync(configPath)) {
+		console.warn('\n⚠️  configuration.yaml not found, skipping dashboard registration')
+		return
+	}
 
-  const content = readFileSync(configPath, 'utf-8')
-  const doc = YAML.parseDocument(content)
+	const content = readFileSync(configPath, 'utf-8')
+	const doc = YAML.parseDocument(content)
 
-  let lovelace = doc.get('lovelace')
+	let lovelace = doc.get('lovelace')
+	if (!lovelace) {
+		lovelace = doc.createNode({})
+		doc.set('lovelace', lovelace)
+	}
 
-  if (!lovelace) {
-    lovelace = doc.createNode({})
-    doc.set('lovelace', lovelace)
-  }
+	let dashboards = doc.getIn(['lovelace', 'dashboards'])
+	if (!dashboards) {
+		dashboards = doc.createNode({})
+		doc.setIn(['lovelace', 'dashboards'], dashboards)
+	}
 
-  let dashboards = doc.getIn(['lovelace', 'dashboards'])
+	for (const reg of registrations) {
+		const dashboardEntry = {
+			mode: 'yaml',
+			title: reg.title,
+			icon: reg.icon,
+			show_in_sidebar: reg.show_in_sidebar,
+			filename: reg.filename,
+		}
+		doc.setIn(['lovelace', 'dashboards', reg.path], dashboardEntry)
+	}
 
-  if (!dashboards) {
-    dashboards = doc.createNode({})
-    doc.setIn(['lovelace', 'dashboards'], dashboards)
-  }
-
-  // Track which paths we're managing
-  const managedPaths = new Set(registrations.map(r => r.path))
-
-  // Update or add each registration
-  for (const reg of registrations) {
-    const dashboardEntry = {
-      mode: 'yaml',
-      title: reg.title,
-      icon: reg.icon,
-      show_in_sidebar: reg.show_in_sidebar,
-      filename: reg.filename,
-    }
-
-    doc.setIn(['lovelace', 'dashboards', reg.path], dashboardEntry)
-  }
-
-  writeFileSync(configPath, doc.toString())
-  console.log(`\n  ✓ configuration.yaml (${registrations.length} dashboard${registrations.length > 1 ? 's' : ''} registered)`)
+	writeFileSync(configPath, doc.toString())
+	console.log(`\n  ✓ configuration.yaml (${registrations.length} dashboard${registrations.length > 1 ? 's' : ''} registered)`)
 }

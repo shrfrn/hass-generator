@@ -1,276 +1,319 @@
+// @ts-check
 // Shared data preparation for dashboard generation
 // This module is template-agnostic - it prepares area data that any template can use
+
+import { extractPrefix } from '../../utils/entity.js'
+
+/**
+ * @typedef {Object} InventoryContext
+ * @property {Map} entityMap - Entities grouped by area_id
+ * @property {Map} sceneMap - Scenes grouped by area_id
+ * @property {Array} allScenes - All scene entities for cross-area lookups
+ */
+
+/**
+ * @typedef {Object} AreaContext
+ * @property {Object} area - The area object from HA
+ * @property {string} prefix - Area prefix (e.g., "lr_")
+ * @property {Array} entities - Entities in this area
+ * @property {Array} scenes - Scenes in this area
+ */
+
+/**
+ * @typedef {Object} ConfigContext
+ * @property {Set} excludedLights - Light entity IDs to exclude
+ * @property {Array} includedLights - Light entity IDs to include
+ * @property {Object} dimmableCompanions - Map of actuator -> companion bulb
+ * @property {Set} excludedScenes - Scene entity IDs to exclude
+ * @property {Array} includedScenes - Scene entity IDs to include from other areas
+ */
+
+/**
+ * Build inventory context from raw inventory data (computed once per run)
+ * @param {Array} entities - All entities from inventory
+ * @returns {InventoryContext}
+ */
+function buildInventoryContext(entities) {
+	const entityMap = new Map()
+	const sceneMap = new Map()
+	const allScenes = []
+
+	for (const entity of entities) {
+		if (entity.domain === 'scene') {
+			allScenes.push(entity)
+			if (entity.area_id) {
+				if (!sceneMap.has(entity.area_id)) sceneMap.set(entity.area_id, [])
+				sceneMap.get(entity.area_id).push(entity)
+			}
+		}
+
+		if (entity.area_id) {
+			if (!entityMap.has(entity.area_id)) entityMap.set(entity.area_id, [])
+			entityMap.get(entity.area_id).push(entity)
+		}
+	}
+
+	return { entityMap, sceneMap, allScenes }
+}
+
+/**
+ * Build area context for a specific area (computed once per area)
+ * @param {Object} area - Area object from HA
+ * @param {string} prefix - Area prefix
+ * @param {InventoryContext} inventoryCtx - Inventory context
+ * @returns {AreaContext}
+ */
+function buildAreaContext(area, prefix, inventoryCtx) {
+	return {
+		area,
+		prefix,
+		entities: inventoryCtx.entityMap.get(area.id) || [],
+		scenes: inventoryCtx.sceneMap.get(area.id) || [],
+	}
+}
+
+/**
+ * Build merged config context from dashboard and generator configs
+ * @param {Object} dashboardAreaConfig - Per-area dashboard config
+ * @param {Object} generatorAreaConfig - Per-area generator config
+ * @returns {ConfigContext}
+ */
+function buildConfigContext(dashboardAreaConfig, generatorAreaConfig) {
+	return {
+		excludedLights: new Set(dashboardAreaConfig.excluded_lights || []),
+		includedLights: dashboardAreaConfig.included_lights || [],
+		dimmableCompanions: generatorAreaConfig.dimmable_companions || {},
+		excludedScenes: new Set(dashboardAreaConfig.excluded_scenes || []),
+		includedScenes: dashboardAreaConfig.included_scenes || [],
+	}
+}
 
 /**
  * Prepare area data for all areas based on inventory and config
  * @param {object} inventory - The HASS inventory data
  * @param {object} config - Dashboard config
  * @param {object} generatorConfig - Generator config (for dimmable_companions, etc.)
- * @param {object} [translator] - Optional translator for i18n
  * @returns {Array} Array of areaData objects
  */
-export function prepareAllAreaData(inventory, config, generatorConfig = {}, translator = null) {
-  const { areas, entities } = inventory
-  const excludedAreas = new Set(config.excluded_areas || [])
-  const pinnedAreas = config.pinned_areas || []
+export function prepareAllAreaData(inventory, config, generatorConfig = {}) {
+	const { areas, entities } = inventory
+	const excludedAreas = new Set(config.excluded_areas || [])
+	const pinnedAreas = config.pinned_areas || []
 
-  const entityMap = buildEntityMap(entities)
-  const allScenes = entities.filter(e => e.domain === 'scene')
-  const sceneMap = buildSceneMapByArea(allScenes)
+	// Build inventory context once
+	const inventoryCtx = buildInventoryContext(entities)
 
-  const sortedAreas = sortAreas(areas, pinnedAreas, excludedAreas)
-  const result = []
+	const sortedAreas = sortAreas(areas, pinnedAreas, excludedAreas)
+	const result = []
 
-  for (const area of sortedAreas) {
-    const prefix = extractPrefix(entities, area.id)
+	for (const area of sortedAreas) {
+		const prefix = extractPrefix(entities, area.id)
 
-    if (!prefix) {
-      console.log(`  ⚠ Skipping ${area.name}: no prefix detected`)
-      continue
-    }
+		if (!prefix) {
+			console.log(`  ⚠ Skipping ${area.name}: no prefix detected`)
+			continue
+		}
 
-    const areaConfig = config.areas?.[area.id] || {}
-    const generatorAreaConfig = generatorConfig.areas?.[area.id] || {}
-    const areaData = buildAreaData(area, prefix, entityMap, sceneMap, areaConfig, generatorAreaConfig, allScenes)
+		// Build contexts for this area
+		const areaCtx = buildAreaContext(area, prefix, inventoryCtx)
+		const dashboardAreaConfig = config.areas?.[area.id] || {}
+		const generatorAreaConfig = generatorConfig.areas?.[area.id] || {}
+		const configCtx = buildConfigContext(dashboardAreaConfig, generatorAreaConfig)
 
-    if (!areaData.lightGroup) {
-      console.log(`  ⚠ Skipping ${area.name}: no light group`)
-      continue
-    }
+		const areaData = buildAreaData(areaCtx, configCtx, inventoryCtx)
 
-    result.push({
-      area,
-      prefix,
-      areaConfig,
-      visibleToUsers: areaConfig.visible_to_users || null,
-      ...areaData,
-    })
-  }
+		if (!areaData.lightGroup) {
+			console.log(`  ⚠ Skipping ${area.name}: no light group`)
+			continue
+		}
 
-  return result
-}
+		result.push({
+			area,
+			prefix,
+			areaConfig: dashboardAreaConfig,
+			visibleToUsers: dashboardAreaConfig.visible_to_users || null,
+			...areaData,
+		})
+	}
 
-function buildEntityMap(entities) {
-  const map = new Map()
-
-  for (const entity of entities) {
-    if (!entity.area_id) continue
-
-    if (!map.has(entity.area_id)) {
-      map.set(entity.area_id, [])
-    }
-
-    map.get(entity.area_id).push(entity)
-  }
-
-  return map
-}
-
-function buildSceneMapByArea(scenes) {
-  const map = new Map()
-
-  for (const scene of scenes) {
-    const areaId = scene.area_id
-    if (!areaId) continue
-
-    if (!map.has(areaId)) {
-      map.set(areaId, [])
-    }
-
-    map.get(areaId).push(scene)
-  }
-
-  return map
+	return result
 }
 
 function sortAreas(areas, pinnedAreas, excludedAreas) {
-  const included = areas.filter(a => !excludedAreas.has(a.id))
-  const pinnedSet = new Set(pinnedAreas)
+	const included = areas.filter(a => !excludedAreas.has(a.id))
+	const pinnedSet = new Set(pinnedAreas)
 
-  const pinned = []
-  const unpinned = []
+	const pinned = []
+	const unpinned = []
 
-  for (const area of included) {
-    if (pinnedSet.has(area.id)) {
-      pinned.push(area)
-    } else {
-      unpinned.push(area)
-    }
-  }
+	for (const area of included) {
+		if (pinnedSet.has(area.id)) {
+			pinned.push(area)
+		} else {
+			unpinned.push(area)
+		}
+	}
 
-  pinned.sort((a, b) => pinnedAreas.indexOf(a.id) - pinnedAreas.indexOf(b.id))
-  unpinned.sort((a, b) => a.name.localeCompare(b.name))
+	pinned.sort((a, b) => pinnedAreas.indexOf(a.id) - pinnedAreas.indexOf(b.id))
+	unpinned.sort((a, b) => a.name.localeCompare(b.name))
 
-  return [...pinned, ...unpinned]
+	return [...pinned, ...unpinned]
 }
 
-export function extractPrefix(entities, areaId) {
-  const areaEntities = entities.filter(e => e.area_id === areaId)
+/**
+ * Build area data using structured contexts
+ * @param {AreaContext} areaCtx - Area context
+ * @param {ConfigContext} configCtx - Merged config context
+ * @param {InventoryContext} inventoryCtx - Inventory context
+ * @returns {Object} Area data with lights, scenes, etc.
+ */
+function buildAreaData(areaCtx, configCtx, inventoryCtx) {
+	const { prefix, entities, scenes } = areaCtx
+	const { excludedLights, includedLights, dimmableCompanions, excludedScenes, includedScenes } = configCtx
 
-  for (const entity of areaEntities) {
-    const name = entity.entity_id.split('.')[1]
-    const underscoreIndex = name?.indexOf('_')
+	const lightGroup = `group.${prefix}lights`
+	const acEntity = findAcEntity(entities)
+	const fanEntity = findFanEntity(entities)
+	const lights = buildLightsList(entities, excludedLights, includedLights, dimmableCompanions)
+	const otherEntities = buildOtherList(entities, lights, acEntity, fanEntity, configCtx)
+	const scenesList = buildScenesList(scenes, excludedScenes, includedScenes, inventoryCtx.allScenes)
 
-    if (underscoreIndex > 0) {
-      return name.substring(0, underscoreIndex + 1)
-    }
-  }
-
-  return null
-}
-
-function buildAreaData(area, prefix, entityMap, sceneMap, areaConfig, generatorAreaConfig, allScenes) {
-  const areaEntities = entityMap.get(area.id) || []
-  const areaScenes = sceneMap.get(area.id) || []
-
-  const excludedLights = new Set(areaConfig.excluded_lights || [])
-  const includedLights = areaConfig.included_lights || []
-  const dimmableCompanions = generatorAreaConfig.dimmable_companions || {}
-
-  const lightGroup = `group.${prefix}lights`
-  const acEntity = findAcEntity(areaEntities)
-  const fanEntity = findFanEntity(areaEntities)
-  const lights = buildLightsList(areaEntities, excludedLights, includedLights, dimmableCompanions)
-  const otherEntities = buildOtherList(areaEntities, excludedLights, lights, acEntity, fanEntity, dimmableCompanions)
-  const scenes = buildScenesList(areaScenes, areaConfig, allScenes)
-
-  return {
-    lightGroup,
-    acEntity,
-    fanEntity,
-    scenes,
-    lights,
-    otherEntities,
-  }
+	return {
+		lightGroup,
+		acEntity,
+		fanEntity,
+		scenes: scenesList,
+		lights,
+		otherEntities,
+	}
 }
 
 function findAcEntity(entities) {
-  const ac = entities.find(e =>
-    e.domain === 'climate' && e.entity_id.endsWith('_ac')
-  )
-
-  return ac?.entity_id || null
+	const ac = entities.find(e => e.domain === 'climate' && e.entity_id.endsWith('_ac'))
+	return ac?.entity_id || null
 }
 
 function findFanEntity(entities) {
-  const fan = entities.find(e => e.domain === 'fan')
+	const fan = entities.find(e => e.domain === 'fan')
+	if (fan) return fan.entity_id
 
-  if (fan) return fan.entity_id
+	const fanSwitch = entities.find(e =>
+		e.domain === 'switch' && (
+			e.entity_id.toLowerCase().includes('fan') ||
+			e.name?.toLowerCase().includes('fan')
+		),
+	)
 
-  const fanSwitch = entities.find(e =>
-    e.domain === 'switch' && (
-      e.entity_id.toLowerCase().includes('fan') ||
-      e.name?.toLowerCase().includes('fan')
-    )
-  )
-
-  return fanSwitch?.entity_id || null
+	return fanSwitch?.entity_id || null
 }
 
 function buildLightsList(entities, excludedLights, includedLights, dimmableCompanions) {
-  const includedSet = new Set(includedLights)
+	const includedSet = new Set(includedLights)
+	const companionBulbs = new Set(Object.values(dimmableCompanions))
 
-  // Companion bulbs are controlled via their actuator - exclude from list
-  const companionBulbs = new Set(Object.values(dimmableCompanions))
+	const result = []
 
-  const result = []
+	// Add explicitly included lights first
+	for (const entityId of includedLights) {
+		if (companionBulbs.has(entityId)) continue
 
-  for (const entityId of includedLights) {
-    if (companionBulbs.has(entityId)) continue
+		const entity = entities.find(e => e.entity_id === entityId)
 
-    const entity = entities.find(e => e.entity_id === entityId)
+		if (entity) {
+			result.push(enrichWithDimming(entity, dimmableCompanions))
+		} else {
+			result.push({ entity_id: entityId, name: null, dimmable: false, brightness_entity: entityId, toggle_entity: entityId, has_advanced_controls: false })
+		}
+	}
 
-    if (entity) {
-      result.push(enrichWithDimming(entity, dimmableCompanions))
-    } else {
-      result.push({ entity_id: entityId, name: null, dimmable: false, brightness_entity: entityId, toggle_entity: entityId, has_advanced_controls: false })
-    }
-  }
+	// Add area lights (excluding already included and companions)
+	const areaLights = entities.filter(e =>
+		e.domain === 'light' &&
+		!excludedLights.has(e.entity_id) &&
+		!includedSet.has(e.entity_id) &&
+		!companionBulbs.has(e.entity_id),
+	)
 
-  const areaLights = entities.filter(e =>
-    e.domain === 'light' &&
-    !excludedLights.has(e.entity_id) &&
-    !includedSet.has(e.entity_id) &&
-    !companionBulbs.has(e.entity_id)
-  )
+	result.push(...areaLights.map(e => enrichWithDimming(e, dimmableCompanions)))
 
-  result.push(...areaLights.map(e => enrichWithDimming(e, dimmableCompanions)))
-
-  return result
+	return result
 }
 
 function enrichWithDimming(entity, dimmableCompanions) {
-  const modes = entity.attributes?.supported_color_modes || []
-  const isOnOffOnly = modes.length === 0 || (modes.length === 1 && modes[0] === 'onoff')
+	const modes = entity.attributes?.supported_color_modes || []
+	const isOnOffOnly = modes.length === 0 || (modes.length === 1 && modes[0] === 'onoff')
+	const companionBulb = dimmableCompanions[entity.entity_id]
+	const colorModes = ['color_temp', 'hs', 'xy', 'rgb', 'rgbw', 'rgbww']
+	const hasAdvancedControls = modes.some(m => colorModes.includes(m))
 
-  // Check if this actuator has a companion bulb for brightness control
-  const companionBulb = dimmableCompanions[entity.entity_id]
-
-  // Color modes that need more-info dialog for full control
-  const colorModes = ['color_temp', 'hs', 'xy', 'rgb', 'rgbw', 'rgbww']
-  const hasAdvancedControls = modes.some(m => colorModes.includes(m))
-
-  return {
-    ...entity,
-    dimmable: !isOnOffOnly || !!companionBulb,
-    brightness_entity: companionBulb || entity.entity_id,
-    toggle_entity: entity.entity_id,
-    has_advanced_controls: hasAdvancedControls,
-  }
+	return {
+		...entity,
+		dimmable: !isOnOffOnly || !!companionBulb,
+		brightness_entity: companionBulb || entity.entity_id,
+		toggle_entity: entity.entity_id,
+		has_advanced_controls: hasAdvancedControls,
+	}
 }
 
-function buildOtherList(entities, excludedLights, lightsInSection, acEntity, fanEntity, dimmableCompanions = {}) {
-  const lightIds = new Set(lightsInSection.map(l => l.entity_id))
+/**
+ * Build list of "other" entities (not lights, climate, fan, etc.)
+ * @param {Array} entities - Area entities
+ * @param {Array} lightsInSection - Lights already in the lights section
+ * @param {string|null} acEntity - AC entity ID to exclude
+ * @param {string|null} fanEntity - Fan entity ID to exclude
+ * @param {ConfigContext} configCtx - Config context
+ * @returns {Array} Filtered entities for "other" section
+ */
+function buildOtherList(entities, lightsInSection, acEntity, fanEntity, configCtx) {
+	const { excludedLights, dimmableCompanions } = configCtx
+	const lightIds = new Set(lightsInSection.map(l => l.entity_id))
+	const companionBulbs = new Set(Object.values(dimmableCompanions))
+	const actuatorsWithCompanions = new Set(Object.keys(dimmableCompanions))
 
-  // Companion bulbs are controlled via their actuator - exclude from Other section too
-  const companionBulbs = new Set(Object.values(dimmableCompanions))
+	const excludeDomains = [
+		'scene', 'sensor', 'binary_sensor', 'automation', 'script',
+		'climate', 'fan', 'group', 'update', 'button', 'event',
+		'number', 'select', 'camera', 'device_tracker', 'person',
+		'remote', 'image', 'todo', 'tts', 'stt', 'conversation',
+		'siren', 'time', 'date', 'datetime',
+	]
 
-  // Actuators that have companions shouldn't appear in Other (they're in Lights)
-  const actuatorsWithCompanions = new Set(Object.keys(dimmableCompanions))
+	return entities.filter(e => {
+		if (excludedLights.has(e.entity_id)) return true
+		if (lightIds.has(e.entity_id)) return false
+		if (companionBulbs.has(e.entity_id)) return false
+		if (actuatorsWithCompanions.has(e.entity_id)) return false
+		if (e.entity_id === acEntity || e.entity_id === fanEntity) return false
+		if (excludeDomains.includes(e.domain)) return false
 
-  return entities.filter(e => {
-    if (excludedLights.has(e.entity_id)) return true
-    if (lightIds.has(e.entity_id)) return false
-    if (companionBulbs.has(e.entity_id)) return false
-    if (actuatorsWithCompanions.has(e.entity_id)) return false
-    if (e.entity_id === acEntity || e.entity_id === fanEntity) return false
-
-    const excludeDomains = [
-      'scene', 'sensor', 'binary_sensor', 'automation', 'script',
-      'climate', 'fan', 'group', 'update', 'button', 'event',
-      'number', 'select', 'camera', 'device_tracker', 'person',
-      'remote', 'image', 'todo', 'tts', 'stt', 'conversation',
-      'siren', 'time', 'date', 'datetime',
-    ]
-
-    if (excludeDomains.includes(e.domain)) return false
-
-    return true
-  })
+		return true
+	})
 }
 
-function buildScenesList(areaScenes, areaConfig, allScenes) {
-  const excludedScenes = new Set(areaConfig.excluded_scenes || [])
-  const includedScenes = areaConfig.included_scenes || []
+/**
+ * Build scenes list with includes/excludes and cross-area scenes
+ * @param {Array} areaScenes - Scenes assigned to this area
+ * @param {Set} excludedScenes - Scene IDs to exclude
+ * @param {Array} includedScenes - Scene IDs to include from other areas
+ * @param {Array} allScenes - All scenes for cross-area lookups
+ * @returns {Array} Filtered and combined scenes
+ */
+function buildScenesList(areaScenes, excludedScenes, includedScenes, allScenes) {
+	const isTemplateScene = s => s.name?.endsWith('_template') || s.entity_id?.endsWith('_template')
+	const filtered = areaScenes.filter(s => !excludedScenes.has(s.entity_id) && !isTemplateScene(s))
+	const includedSet = new Set(filtered.map(s => s.entity_id))
 
-  // Filter out template scenes (name ends with _template) and excluded scenes
-  const isTemplateScene = s => s.name?.endsWith('_template') || s.entity_id?.endsWith('_template')
-  const filtered = areaScenes.filter(s => !excludedScenes.has(s.entity_id) && !isTemplateScene(s))
+	for (const sceneId of includedScenes) {
+		if (includedSet.has(sceneId)) continue
 
-  const includedSet = new Set(filtered.map(s => s.entity_id))
+		const scene = allScenes.find(s => s.entity_id === sceneId)
 
-  for (const sceneId of includedScenes) {
-    if (includedSet.has(sceneId)) continue
+		if (scene && !isTemplateScene(scene)) {
+			filtered.push(scene)
+		} else if (!scene) {
+			filtered.push({ entity_id: sceneId, name: null })
+		}
+	}
 
-    const scene = allScenes.find(s => s.entity_id === sceneId)
-
-    if (scene && !isTemplateScene(scene)) {
-      filtered.push(scene)
-    } else if (!scene) {
-      filtered.push({ entity_id: sceneId, name: null })
-    }
-  }
-
-  return filtered
+	return filtered
 }
-

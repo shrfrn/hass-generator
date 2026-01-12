@@ -1,3 +1,4 @@
+// @ts-check
 // Dashboard generator orchestrator
 // Prepares data and delegates rendering to the specified template
 
@@ -13,21 +14,21 @@ import { loadTemplate, getAvailableTemplates } from './templates/index.js'
  * @returns {Promise<object>} Lovelace dashboard YAML structure
  */
 export async function generateDashboard(inventory, config, generatorConfig = {}, translator = null) {
-  const templateName = config.template
+	const templateName = config.template
 
-  if (!templateName) {
-    const available = getAvailableTemplates().join(', ')
-    throw new Error(`Dashboard config must specify 'template'. Available: ${available}`)
-  }
+	if (!templateName) {
+		const available = getAvailableTemplates().join(', ')
+		throw new Error(`Dashboard config must specify 'template'. Available: ${available}`)
+	}
 
-  console.log(`\n🎨 Generating dashboard with template: ${templateName}`)
+	console.log(`\n🎨 Generating dashboard with template: ${templateName}`)
 
-  const template = await loadTemplate(templateName)
-  const areaDataList = prepareAllAreaData(inventory, config, generatorConfig, translator)
+	const template = await loadTemplate(templateName)
+	const areaDataList = prepareAllAreaData(inventory, config, generatorConfig)
 
-  console.log(`   Processing ${areaDataList.length} areas...`)
+	console.log(`   Processing ${areaDataList.length} areas...`)
 
-  return template.render(areaDataList, config, translator)
+	return template.render(areaDataList, config, translator)
 }
 
 // Re-export for convenience

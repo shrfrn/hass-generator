@@ -1,0 +1,93 @@
+// Type definitions for generator config
+// These types are stable and only change with tool updates
+
+import type { AreaId, EntityId, LabelId } from './hass.d.ts'
+
+export interface AreaConfig {
+  /** Override vacancy timer duration for this area */
+  vacancy_timer_duration?: string
+
+  /** Entity IDs to add to the light group */
+  include_in_group?: EntityId[]
+
+  /** Entity IDs to exclude from the light group */
+  exclude_from_group?: EntityId[]
+
+  /** Labels to exclude (overrides global excluded_labels for this area) */
+  excluded_labels?: LabelId[]
+
+  /** Labels to include (added to global included_labels for this area) */
+  included_labels?: LabelId[]
+
+  /**
+   * Maps on/off actuators to their companion dimmable bulbs.
+   * The actuator controls power, the bulb controls brightness.
+   * Companion bulbs are auto-excluded from light groups and dashboard lists.
+   * @example { 'switch.mb_soc': 'light.mb_soc_bulb' }
+   */
+  dimmable_companions?: Partial<Record<EntityId, EntityId>>
+}
+
+export interface GeneratorConfig {
+  /** Schema version - do not change manually */
+  schemaVersion: number
+
+  /** Default vacancy timer duration (HH:MM:SS format) */
+  default_vacancy_duration?: string
+
+  /** Labels to exclude from ALL light groups by default */
+  excluded_labels?: LabelId[]
+
+  /** Labels to always include in light groups */
+  included_labels?: LabelId[]
+
+  /** Per-area configuration overrides */
+  areas?: Partial<Record<AreaId, AreaConfig>>
+}
+
+export interface DashboardAreaConfig {
+  /** Lights to exclude from the Lights section */
+  excluded_lights?: EntityId[]
+
+  /** Entities to add to the Lights section (display only) */
+  included_lights?: EntityId[]
+
+  /** Scenes from other areas to include in this area's detailed view */
+  included_scenes?: EntityId[]
+
+  /** Scenes to exclude from this area's detailed view (show in another area instead) */
+  excluded_scenes?: EntityId[]
+
+  /** User IDs that can see this area */
+  visible_to_users?: string[]
+}
+
+/** Available dashboard templates */
+export type DashboardTemplate = 'bubble' | 'mushroom'
+
+export interface DashboardConfig {
+  /** Schema version - do not change manually */
+  schemaVersion: number
+
+  /** Dashboard template to use (e.g., 'bubble', 'mushroom') */
+  template: DashboardTemplate
+
+  /** Output file path (relative to project root) */
+  output: string
+
+  /** Dashboard view title */
+  dashboard_name?: string
+
+  /** Areas to pin at the top of the dashboard (in order) */
+  pinned_areas?: AreaId[]
+
+  /** Areas to exclude from the dashboard */
+  excluded_areas?: AreaId[]
+
+  /** Scene suffix for default tap action */
+  default_scene_suffix?: string
+
+  /** Per-area dashboard configuration */
+  areas?: Partial<Record<AreaId, DashboardAreaConfig>>
+}
+
