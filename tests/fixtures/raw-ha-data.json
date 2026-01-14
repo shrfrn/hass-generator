@@ -1,0 +1,258 @@
+{
+  "states": [
+    {
+      "entity_id": "light.lr_ceiling",
+      "state": "on",
+      "attributes": {
+        "friendly_name": "Ceiling",
+        "supported_color_modes": ["brightness"],
+        "brightness": 255
+      }
+    },
+    {
+      "entity_id": "light.lr_wall",
+      "state": "off",
+      "attributes": {
+        "friendly_name": "Wall",
+        "supported_color_modes": ["onoff"]
+      }
+    },
+    {
+      "entity_id": "light.lr_outdoor",
+      "state": "off",
+      "attributes": {
+        "friendly_name": "Outdoor Light",
+        "supported_color_modes": ["brightness"]
+      }
+    },
+    {
+      "entity_id": "climate.lr_ac",
+      "state": "off",
+      "attributes": {
+        "friendly_name": "AC",
+        "hvac_modes": ["off", "cool", "heat"]
+      }
+    },
+    {
+      "entity_id": "scene.lr_standard",
+      "state": "scening",
+      "attributes": {
+        "friendly_name": "Standard"
+      }
+    },
+    {
+      "entity_id": "scene.lr_minimal",
+      "state": "scening",
+      "attributes": {
+        "friendly_name": "Minimal"
+      }
+    },
+    {
+      "entity_id": "light.mb_ceiling",
+      "state": "off",
+      "attributes": {
+        "friendly_name": "Ceiling",
+        "supported_color_modes": ["brightness"]
+      }
+    },
+    {
+      "entity_id": "person.john",
+      "state": "home",
+      "attributes": {
+        "friendly_name": "John Doe"
+      }
+    },
+    {
+      "entity_id": "person.jane",
+      "state": "not_home",
+      "attributes": {
+        "friendly_name": "Jane Doe"
+      }
+    }
+  ],
+  "areas": [
+    {
+      "area_id": "living_room",
+      "name": "Living Room",
+      "icon": "mdi:sofa",
+      "floor_id": null,
+      "aliases": [],
+      "labels": []
+    },
+    {
+      "area_id": "bedroom",
+      "name": "Bedroom",
+      "icon": "mdi:bed",
+      "floor_id": null,
+      "aliases": [],
+      "labels": []
+    },
+    {
+      "area_id": "kitchen",
+      "name": "Kitchen",
+      "icon": "mdi:pot",
+      "floor_id": null,
+      "aliases": [],
+      "labels": []
+    }
+  ],
+  "floors": [],
+  "devices": [
+    {
+      "id": "device_lr_ceiling",
+      "name": "Ceiling Light",
+      "name_by_user": null,
+      "manufacturer": "ACME",
+      "model": "Smart Light",
+      "area_id": "living_room",
+      "labels": [],
+      "disabled_by": null,
+      "via_device_id": null,
+      "identifiers": [],
+      "connections": []
+    },
+    {
+      "id": "device_mb_ceiling",
+      "name": "Bedroom Ceiling Light",
+      "name_by_user": null,
+      "manufacturer": "ACME",
+      "model": "Smart Light",
+      "area_id": "bedroom",
+      "labels": [],
+      "disabled_by": null,
+      "via_device_id": null,
+      "identifiers": [],
+      "connections": []
+    }
+  ],
+  "entityRegistry": [
+    {
+      "entity_id": "light.lr_ceiling",
+      "device_id": "device_lr_ceiling",
+      "area_id": null,
+      "labels": [],
+      "name": null,
+      "platform": "demo",
+      "disabled_by": null,
+      "hidden_by": null,
+      "icon": null
+    },
+    {
+      "entity_id": "light.lr_wall",
+      "device_id": null,
+      "area_id": "living_room",
+      "labels": [],
+      "name": "Wall",
+      "platform": "demo",
+      "disabled_by": null,
+      "hidden_by": null,
+      "icon": null
+    },
+    {
+      "entity_id": "light.lr_outdoor",
+      "device_id": null,
+      "area_id": "living_room",
+      "labels": ["outdoor"],
+      "name": "Outdoor Light",
+      "platform": "demo",
+      "disabled_by": null,
+      "hidden_by": null,
+      "icon": null
+    },
+    {
+      "entity_id": "climate.lr_ac",
+      "device_id": null,
+      "area_id": "living_room",
+      "labels": [],
+      "name": "AC",
+      "platform": "demo",
+      "disabled_by": null,
+      "hidden_by": null,
+      "icon": null
+    },
+    {
+      "entity_id": "scene.lr_standard",
+      "device_id": null,
+      "area_id": "living_room",
+      "labels": [],
+      "name": "Standard",
+      "platform": "demo",
+      "disabled_by": null,
+      "hidden_by": null,
+      "icon": null
+    },
+    {
+      "entity_id": "scene.lr_minimal",
+      "device_id": null,
+      "area_id": "living_room",
+      "labels": [],
+      "name": "Minimal",
+      "platform": "demo",
+      "disabled_by": null,
+      "hidden_by": null,
+      "icon": null
+    },
+    {
+      "entity_id": "light.mb_ceiling",
+      "device_id": "device_mb_ceiling",
+      "area_id": null,
+      "labels": [],
+      "name": null,
+      "platform": "demo",
+      "disabled_by": null,
+      "hidden_by": null,
+      "icon": null
+    },
+    {
+      "entity_id": "person.john",
+      "device_id": null,
+      "area_id": null,
+      "labels": [],
+      "name": null,
+      "platform": "demo",
+      "disabled_by": null,
+      "hidden_by": null,
+      "icon": null
+    },
+    {
+      "entity_id": "person.jane",
+      "device_id": null,
+      "area_id": null,
+      "labels": [],
+      "name": null,
+      "platform": "demo",
+      "disabled_by": null,
+      "hidden_by": null,
+      "icon": null
+    }
+  ],
+  "labels": [
+    {
+      "label_id": "outdoor",
+      "name": "Outdoor",
+      "color": null,
+      "icon": null,
+      "description": null
+    }
+  ],
+  "zones": [],
+  "persons": {
+    "storage": [
+      {
+        "id": "john",
+        "name": "John Doe",
+        "user_id": "user_john",
+        "device_trackers": [],
+        "picture": null
+      },
+      {
+        "id": "jane",
+        "name": "Jane Doe",
+        "user_id": "user_jane",
+        "device_trackers": [],
+        "picture": null
+      }
+    ],
+    "config": []
+  }
+}

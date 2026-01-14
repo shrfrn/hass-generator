@@ -1,0 +1,10 @@
+---
+name: sync-test-and-config-options
+description: Whenever config options are added or modified in the generator, tests, and documentation must be updated accordingly.
+---
+
+# Overview
+
+As development unflolds, new options are added to generator.config.js and dashboard.config.js and previous options may be changed or removed. 
+
+Always updated CONFIG_OPTIONS.md and the test suite to stay in sync with these changes 

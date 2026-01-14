@@ -24,9 +24,6 @@ const config = {
   // Entities with these labels won't be added to area light groups
   excluded_labels: [],
 
-  // Labels to always include in light groups (overrides excluded_labels)
-  included_labels: [],
-
   // ─────────────────────────────────────────────────────────────────────────
   // PER-AREA OVERRIDES
   // ─────────────────────────────────────────────────────────────────────────

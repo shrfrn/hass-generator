@@ -80,12 +80,10 @@ function getAreaLightEntities(area, entities, areaConfig, globalConfig, _prefix)
 	const companionBulbs = new Set(Object.values(dimmableCompanions))
 
 	const globalExcludedLabels = globalConfig.excluded_labels || []
-	const globalIncludedLabels = new Set(globalConfig.included_labels || [])
 	const areaExcludedLabels = areaConfig.excluded_labels
-	const areaIncludedLabels = new Set(areaConfig.included_labels || [])
 
 	const excludedLabels = new Set(areaExcludedLabels ?? globalExcludedLabels)
-	const includedLabels = new Set([...globalIncludedLabels, ...areaIncludedLabels])
+	const includedLabels = new Set(areaConfig.included_labels || [])
 
 	const areaLights = entities
 		.filter(e => e.area_id === area.id && e.domain === 'light')
