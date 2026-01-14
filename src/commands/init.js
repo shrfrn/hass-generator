@@ -24,6 +24,7 @@ export async function init(destination) {
 		{ src: 'users.js', dest: 'users.js' },
 		{ src: 'package.json', dest: 'package.json' },
 		{ src: '.env.example', dest: '.env.example' },
+		{ src: 'configuration.base.yaml', dest: 'configuration.base.yaml' },
 
 		// Dashboard config (dashboards/)
 		{ src: 'dashboard.config.js', dest: 'dashboards/main.config.js' },

@@ -364,12 +364,51 @@ function extractManualEntries(indexPath) {
 }
 
 /**
- * Update configuration.yaml with dashboard registrations
+ * Rebuild configuration.yaml from base template with dashboard registrations
  * @param {Array<{ path: string, title: string, icon: string, show_in_sidebar: boolean, filename: string }>} registrations
  */
 function updateConfigurationYaml(registrations) {
+	const basePath = join(process.cwd(), 'configuration.base.yaml')
 	const configPath = join(process.cwd(), 'configuration.yaml')
 
+	// Check for base template
+	if (!existsSync(basePath)) {
+		console.warn('\n⚠️  configuration.base.yaml not found, falling back to in-place update')
+		updateConfigurationYamlLegacy(registrations, configPath)
+		return
+	}
+
+	// Read base template and parse
+	const baseContent = readFileSync(basePath, 'utf-8')
+	const doc = YAML.parseDocument(baseContent)
+
+	// Build dashboards section from scratch
+	const dashboards = {}
+	for (const reg of registrations) {
+		dashboards[reg.path] = {
+			mode: 'yaml',
+			title: reg.title,
+			icon: reg.icon,
+			show_in_sidebar: reg.show_in_sidebar,
+			filename: reg.filename,
+		}
+	}
+
+	// Set dashboards (replaces any existing)
+	if (Object.keys(dashboards).length > 0) {
+		doc.setIn(['lovelace', 'dashboards'], dashboards)
+	}
+
+	writeFileSync(configPath, doc.toString())
+	console.log(`\n  ✓ configuration.yaml (rebuilt from base, ${registrations.length} dashboard${registrations.length > 1 ? 's' : ''})`)
+}
+
+/**
+ * Legacy in-place update for backwards compatibility
+ * @param {Array<{ path: string, title: string, icon: string, show_in_sidebar: boolean, filename: string }>} registrations
+ * @param {string} configPath
+ */
+function updateConfigurationYamlLegacy(registrations, configPath) {
 	if (!existsSync(configPath)) {
 		console.warn('\n⚠️  configuration.yaml not found, skipping dashboard registration')
 		return

@@ -4,6 +4,7 @@ This document describes all configuration options for the hass-generator tool.
 
 ## Table of Contents
 
+- [Home Assistant Base Config (`configuration.base.yaml`)](#home-assistant-base-config)
 - [YAML/Entity Generation (`generator.config.js`)](#yamlentity-generation)
   - [Global Options](#global-options)
   - [Per-Area Options](#per-area-options)
@@ -17,6 +18,49 @@ This document describes all configuration options for the hass-generator tool.
 - [User Groups (`users.js`)](#user-groups)
 - [Multi-Language Dashboards](#multi-language-dashboards)
 - [Common Patterns](#common-patterns)
+
+---
+
+## Home Assistant Base Config
+
+**File:** `configuration.base.yaml`  
+**Output:** `configuration.yaml`
+
+The generator rebuilds `configuration.yaml` from scratch on every run using `configuration.base.yaml` as the source template. The `lovelace.dashboards` section is automatically appended based on your dashboard configs.
+
+**Why this approach:**
+- No stale dashboard entries (full rebuild removes old dashboards automatically)
+- Single source of truth for static HA config
+- Dashboard registration always matches your `*.config.js` files
+
+**What to edit:**
+- ✅ Edit `configuration.base.yaml` for static config changes (integrations, resources, etc.)
+- ❌ Don't edit `configuration.yaml` directly (it gets overwritten)
+
+**Example `configuration.base.yaml`:**
+
+```yaml
+default_config:
+
+frontend:
+  themes: !include_dir_merge_named themes
+
+automation: !include automations.yaml
+script: !include scripts.yaml
+scene: !include scenes.yaml
+
+homeassistant:
+  packages: !include packages/index.yaml
+
+lovelace:
+  mode: yaml
+  resources:
+    - url: /hacsfiles/Bubble-Card/bubble-card.js
+      type: module
+    - url: /hacsfiles/lovelace-mushroom/mushroom.js
+      type: module
+# dashboards section is appended automatically by the generator
+```
 
 ---
 
