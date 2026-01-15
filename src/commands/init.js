@@ -20,25 +20,30 @@ export async function init(destination) {
 
 	const files = [
 		// Config files (root)
-		{ src: 'generator.config.js', dest: 'generator.config.js' },
-		{ src: 'users.js', dest: 'users.js' },
-		{ src: 'package.json', dest: 'package.json' },
-		{ src: '.env.example', dest: '.env.example' },
-		{ src: 'configuration.base.yaml', dest: 'configuration.base.yaml' },
+		{ src: 'config/generator.config.js', dest: 'generator.config.js' },
+		{ src: 'config/users.js', dest: 'users.js' },
+		{ src: 'config/package.json', dest: 'package.json' },
+		{ src: 'config/.env.example', dest: '.env.example' },
+		{ src: 'config/configuration.base.yaml', dest: 'configuration.base.yaml' },
 
 		// Dashboard config (dashboards/)
-		{ src: 'dashboard.config.js', dest: 'dashboards/main.config.js' },
+		{ src: 'config/dashboard.config.js', dest: 'dashboards/main.config.js' },
 
-		// Scripts (scripts/)
-		{ src: 'deploy.sh', dest: 'scripts/deploy.sh', executable: true },
-		{ src: 'ship.sh', dest: 'scripts/ship.sh', executable: true },
-		{ src: 'rebuild.sh', dest: 'scripts/rebuild.sh', executable: true },
+		// Shell scripts (scripts/)
+		{ src: 'scripts/deploy.sh', dest: 'scripts/deploy.sh', executable: true },
+		{ src: 'scripts/ship.sh', dest: 'scripts/ship.sh', executable: true },
+		{ src: 'scripts/rebuild.sh', dest: 'scripts/rebuild.sh', executable: true },
+
+		// Generated YAML placeholders
+		{ src: 'generated/automations.yaml', dest: 'automations/generated.yaml' },
+		{ src: 'generated/scenes.yaml', dest: 'scenes/generated.yaml' },
+		{ src: 'generated/scripts.yaml', dest: 'ha-scripts/generated.yaml' },
 	]
 
 	console.log(`🏠 Initializing HASS generator project in ${targetDir}...\n`)
 
 	// Create directories
-	const dirs = ['inventory/types', 'i18n', 'dashboards', 'scripts', 'packages', 'lovelace']
+	const dirs = ['inventory/types', 'i18n', 'dashboards', 'scripts', 'packages', 'lovelace', 'automations', 'scenes', 'ha-scripts']
 
 	for (const dir of dirs) {
 		const dirPath = join(targetDir, dir)

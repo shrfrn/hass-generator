@@ -1,5 +1,5 @@
 // @ts-check
-import { existsSync, readFileSync, writeFileSync, rmSync } from 'fs'
+import { existsSync, writeFileSync, mkdirSync, rmSync } from 'fs'
 import { join } from 'path'
 import YAML from 'yaml'
 import { cwdPath } from '../paths.js'
@@ -7,17 +7,16 @@ import { extractPrefix } from '../utils/entity.js'
 
 export async function generateSceneTemplates(inventory, config, packagesDir) {
 	const { areas, entities } = inventory
-	const scenesPath = cwdPath('scenes.yaml')
+
+	// Generated scenes go to scenes/generated.yaml (separate from UI-managed scenes.yaml)
+	const scenesDir = cwdPath('scenes')
+	const generatedPath = join(scenesDir, 'generated.yaml')
 
 	console.log('\nGenerating scene templates...')
 
-	// Read existing scenes
-	const existingScenes = readExistingScenes(scenesPath)
+	// Ensure scenes directory exists
+	if (!existsSync(scenesDir)) mkdirSync(scenesDir, { recursive: true })
 
-	// Filter out old auto-generated templates (name ends with _template)
-	const manualScenes = existingScenes.filter(s => !s.name?.endsWith('_template'))
-
-	// Generate new templates
 	const templateScenes = []
 
 	for (const area of areas) {
@@ -38,13 +37,10 @@ export async function generateSceneTemplates(inventory, config, packagesDir) {
 		console.log(`  ✓ ${prefix}template`)
 	}
 
-	// Combine: manual scenes first, then templates
-	const allScenes = [...manualScenes, ...templateScenes]
+	// Write generated scenes to separate file (no merge with UI scenes needed)
+	writeFileSync(generatedPath, YAML.stringify(templateScenes, { lineWidth: 0 }))
 
-	// Write back to scenes.yaml
-	writeFileSync(scenesPath, YAML.stringify(allScenes, { lineWidth: 0 }))
-
-	console.log(`  → Updated scenes.yaml (${templateScenes.length} templates)`)
+	console.log(`  → Updated scenes/generated.yaml (${templateScenes.length} templates)`)
 
 	// Clean up old scene-templates directory if it exists
 	const oldTemplatesDir = join(packagesDir, 'scene-templates')
@@ -54,20 +50,6 @@ export async function generateSceneTemplates(inventory, config, packagesDir) {
 	}
 
 	return []
-}
-
-function readExistingScenes(scenesPath) {
-	if (!existsSync(scenesPath)) return []
-
-	const content = readFileSync(scenesPath, 'utf-8')
-	if (!content.trim()) return []
-
-	try {
-		return YAML.parse(content) || []
-	} catch {
-		console.log('  ⚠ Could not parse scenes.yaml, starting fresh')
-		return []
-	}
 }
 
 function getAreaLightEntities(area, entities, areaConfig, globalConfig, _prefix) {
