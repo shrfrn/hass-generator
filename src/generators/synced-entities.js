@@ -200,10 +200,7 @@ export function generateSyncAutomation(fixtureId, fixture) {
 
 	const entityIds = syncEntities.map(e => e.entity_id)
 
-	// Determine service domain from first entity
-	const domain = entityIds[0].split('.')[0]
-	const serviceDomain = domain === 'switch' ? 'switch' : 'light'
-
+	// Use homeassistant.turn_on/off which works on any entity type (switch, light, etc.)
 	return {
 		id: `sync_${fixtureId}`,
 		alias: `Sync ${fixture.name}`,
@@ -217,7 +214,7 @@ export function generateSyncAutomation(fixtureId, fixture) {
 			value_template: '{{ trigger.to_state.state != trigger.from_state.state }}',
 		}],
 		action: [{
-			service: `${serviceDomain}.turn_{{ trigger.to_state.state }}`,
+			service: 'homeassistant.turn_{{ trigger.to_state.state }}',
 			target: {
 				entity_id: `{% set triggered = trigger.entity_id %}\n{% set all = ${JSON.stringify(entityIds)} %}\n{{ all | reject('eq', triggered) | list }}`,
 			},
