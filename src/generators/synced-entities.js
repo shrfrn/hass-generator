@@ -109,6 +109,7 @@ function buildWaitTemplate(entityIds) {
 
 /**
  * Generate a template light for a fixture with power control
+ * Uses legacy light.template platform format (works in packages)
  * @param {string} fixtureId
  * @param {import('../types/config.d.ts').SyncedFixture} fixture
  * @returns {object}
@@ -123,57 +124,47 @@ export function generateTemplateLight(fixtureId, fixture) {
 	// Get controls from primary dimmable to determine template capabilities
 	const controls = primaryDimmable ? resolveControls(primaryDimmable.controls) : ['on', 'off']
 
+	// Legacy format: light.template platform (entity ID comes from the key name)
 	const templateLight = {
-		name: fixture.name,
-		unique_id: fixtureId,
-		state: `{{ is_state('${fixture.power}', 'on') }}`,
-		turn_on: [{ service: 'light.turn_on', target: { entity_id: fixture.power } }],
-		turn_off: [{ service: 'light.turn_off', target: { entity_id: fixture.power } }],
+		friendly_name: fixture.name,
+		value_template: `{{ is_state('${fixture.power}', 'on') }}`,
+		turn_on: { service: 'light.turn_on', target: { entity_id: fixture.power } },
+		turn_off: { service: 'light.turn_off', target: { entity_id: fixture.power } },
 	}
 
-	// Add level attribute and set_level action if dimmable
+	// Add level_template and set_level action if dimmable
 	if (controls.includes('brightness') && primaryDimmable) {
-		templateLight.level = `{{ state_attr('${primaryDimmable.entity_id}', 'brightness') | default(0) }}`
+		templateLight.level_template = `{{ state_attr('${primaryDimmable.entity_id}', 'brightness') | default(0) }}`
 		templateLight.set_level = [
 			{ service: 'light.turn_on', target: { entity_id: fixture.power } },
 			{ wait_template: buildWaitTemplate(dimmableIds), timeout: '00:00:05' },
 			{
 				service: 'light.turn_on',
-				target: { entity_id: dimmableIds },
+				target: { entity_id: dimmableIds.length === 1 ? dimmableIds[0] : dimmableIds },
 				data: { brightness: '{{ brightness }}' },
 			},
 		]
 	}
 
-	// Add color_temp if tunable
+	// Add temperature_template if tunable
 	if (controls.includes('color_temp') && primaryDimmable) {
-		templateLight.color_temp = `{{ state_attr('${primaryDimmable.entity_id}', 'color_temp') }}`
-		templateLight.set_color_temp = [
+		templateLight.temperature_template = `{{ state_attr('${primaryDimmable.entity_id}', 'color_temp') }}`
+		templateLight.set_temperature = [
 			{ service: 'light.turn_on', target: { entity_id: fixture.power } },
 			{ wait_template: buildWaitTemplate(dimmableIds), timeout: '00:00:05' },
 			{
 				service: 'light.turn_on',
-				target: { entity_id: dimmableIds },
+				target: { entity_id: dimmableIds.length === 1 ? dimmableIds[0] : dimmableIds },
 				data: { color_temp: '{{ color_temp }}' },
 			},
 		]
 	}
 
-	// Add rgb if supported
-	if (controls.includes('rgb') && primaryDimmable) {
-		templateLight.rgb_color = `{{ state_attr('${primaryDimmable.entity_id}', 'rgb_color') }}`
-		templateLight.set_rgb = [
-			{ service: 'light.turn_on', target: { entity_id: fixture.power } },
-			{ wait_template: buildWaitTemplate(dimmableIds), timeout: '00:00:05' },
-			{
-				service: 'light.turn_on',
-				target: { entity_id: dimmableIds },
-				data: { rgb_color: '{{ rgb }}' },
-			},
-		]
+	// Return legacy platform format structure
+	return {
+		platform: 'template',
+		lights: { [fixtureId]: templateLight },
 	}
-
-	return { light: [templateLight] }
 }
 
 /**
@@ -237,17 +228,17 @@ export function generateSyncAutomation(fixtureId, fixture) {
 /**
  * Process all synced entities for an area and return YAML structures
  * @param {Record<string, import('../types/config.d.ts').SyncedFixture>} syncedEntities
- * @returns {{ templates: object[], lightGroups: object[], automations: object[] }}
+ * @returns {{ templateLights: object[], lightGroups: object[], automations: object[] }}
  */
 export function processSyncedEntities(syncedEntities) {
-	const templates = []
+	const templateLights = []
 	const lightGroups = []
 	const automations = []
 
 	for (const [fixtureId, fixture] of Object.entries(syncedEntities)) {
-		// Generate template light (if power entity set)
+		// Generate template light (if power entity set) - legacy platform format
 		const templateLight = generateTemplateLight(fixtureId, fixture)
-		if (templateLight) templates.push(templateLight)
+		if (templateLight) templateLights.push(templateLight)
 
 		// Generate light group (if power null + multiple dimmables)
 		const lightGroup = generateLightGroup(fixtureId, fixture)
@@ -258,7 +249,7 @@ export function processSyncedEntities(syncedEntities) {
 		if (syncAutomation) automations.push(syncAutomation)
 	}
 
-	return { templates, lightGroups, automations }
+	return { templateLights, lightGroups, automations }
 }
 
 /**

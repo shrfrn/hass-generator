@@ -64,11 +64,13 @@ function buildVacancyTimer(area, areaConfig, globalConfig) {
 function buildSyncedEntitiesSection(syncedEntities) {
 	if (!syncedEntities) return {}
 
-	const { templates, lightGroups, automations } = processSyncedEntities(syncedEntities)
+	const { templateLights, lightGroups, automations } = processSyncedEntities(syncedEntities)
 	const result = {}
 
-	if (templates.length > 0) result.template = templates
-	if (lightGroups.length > 0) result.light = lightGroups
+	// Template lights use legacy platform format - combine with light groups under 'light:'
+	const allLights = [...templateLights, ...lightGroups]
+	if (allLights.length > 0) result.light = allLights
+
 	if (automations.length > 0) result.automation = automations
 
 	return result

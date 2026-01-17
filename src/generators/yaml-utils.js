@@ -29,7 +29,7 @@ export function serializeToYaml(obj, indent = 0, addSectionSpacing = false) {
 		result += `${spaces}${key}:`
 
 		if (typeof value === 'string') {
-			result += ` ${formatYamlString(value)}\n`
+			result += ` ${formatYamlString(value, indent + 1)}\n`
 		} else if (typeof value === 'number' || typeof value === 'boolean') {
 			result += ` ${value}\n`
 		} else if (Array.isArray(value)) {
@@ -48,7 +48,7 @@ function serializeYamlArray(arr, indent) {
 
 	for (const item of arr) {
 		if (typeof item === 'string') {
-			result += `${spaces}- ${formatYamlString(item)}\n`
+			result += `${spaces}- ${formatYamlString(item, indent + 1)}\n`
 		} else if (typeof item === 'object' && !Array.isArray(item)) {
 			// Object in array - use block style
 			const entries = Object.entries(item)
@@ -62,7 +62,7 @@ function serializeYamlArray(arr, indent) {
 				} else if (Array.isArray(firstValue)) {
 					result += '\n' + serializeYamlArray(firstValue, indent + 2)
 				} else {
-					result += ` ${formatYamlValue(firstValue)}\n`
+					result += ` ${formatYamlValue(firstValue, indent + 2)}\n`
 				}
 
 				// Remaining entries at same indent as first key
@@ -75,7 +75,7 @@ function serializeYamlArray(arr, indent) {
 					} else if (Array.isArray(value)) {
 						result += '\n' + serializeYamlArray(value, indent + 2)
 					} else {
-						result += ` ${formatYamlValue(value)}\n`
+						result += ` ${formatYamlValue(value, indent + 2)}\n`
 					}
 				}
 			}
@@ -87,11 +87,12 @@ function serializeYamlArray(arr, indent) {
 	return result
 }
 
-function formatYamlString(str) {
+function formatYamlString(str, indent = 0) {
 	// Multi-line strings use literal block scalar
 	if (str.includes('\n')) {
 		const lines = str.split('\n')
-		return '>\n' + lines.map(line => '  ' + line).join('\n')
+		const spaces = '  '.repeat(indent)
+		return '>\n' + lines.map(line => spaces + line).join('\n')
 	}
 
 	// Strings that need quoting
@@ -102,8 +103,8 @@ function formatYamlString(str) {
 	return str
 }
 
-function formatYamlValue(value) {
-	if (typeof value === 'string') return formatYamlString(value)
+function formatYamlValue(value, indent = 0) {
+	if (typeof value === 'string') return formatYamlString(value, indent)
 	return value
 }
 
