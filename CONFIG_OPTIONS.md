@@ -91,16 +91,60 @@ Defined under `areas.<area_id>`:
 | `exclude_from_group` | `string[]` | Entity IDs to exclude from the light group. |
 | `excluded_labels` | `string[]` | Labels to exclude for this area. **Overrides** (replaces) global `excluded_labels`. |
 | `included_labels` | `string[]` | Labels to include for this area. **Overrides** global `excluded_labels` for matching entities. |
-| `dimmable_companions` | `object` | Maps on/off actuators to companion dimmable bulbs. See below. |
+| `dimmable_companions` | `object` | **Deprecated.** Use `syncedEntities` instead. |
+| `syncedEntities` | `object` | Synced entity fixtures. Generates sync automations, template lights, and groups. See below. |
 
-#### Dimmable Companions
+#### Synced Entities
 
-Maps an on/off actuator (switch/light) to a smart bulb that provides dimming control:
+Configure fixtures where multiple entities should sync together (e.g., KNX wall switches + smart bulbs):
 
-- **Key**: The actuator entity ID (controls power)
-- **Value**: The companion bulb entity ID (controls brightness)
+```javascript
+syncedEntities: {
+  fixture_id: {
+    name: 'Fixture Display Name',
+    power: 'light.power_entity',  // or null if always powered
+    entities: [
+      { entity_id: 'light.relay', sync: true },
+      { entity_id: 'light.bulb', sync: true, controls: 'dimmable' },
+    ],
+  },
+}
+```
 
-Companion bulbs are automatically excluded from light groups and dashboard light lists.
+**Properties:**
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `name` | `string` | Display name for the fixture |
+| `power` | `string \| null` | Power control entity. `null` = always on, entity_id = generates template light with boot-wait |
+| `entities` | `SyncedEntity[]` | Entities in this fixture |
+
+**Entity Properties:**
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `entity_id` | `string` | Entity ID |
+| `sync` | `boolean` | Whether entity participates in bidirectional sync |
+| `controls` | `string \| string[]` | Control capabilities. Default: `['on', 'off']` |
+
+**Controls Shorthand:**
+
+| Value | Resolves To |
+|-------|-------------|
+| (omitted) | `['on', 'off']` |
+| `'dimmable'` | `['on', 'off', 'brightness']` |
+| `'tunable'` | `['on', 'off', 'brightness', 'color_temp']` |
+| `'rgb'` | `['on', 'off', 'brightness', 'rgb']` |
+
+**What Gets Generated:**
+
+| `power` | dimmables | Generated |
+|---------|-----------|-----------|
+| entity_id | any | Template light with boot-wait + sync automation |
+| null | 1 | Sync automation only (bulb used directly) |
+| null | 2+ | Light group + sync automation |
+
+> **Note:** Configure Z2M power-on brightness to prevent bulbs turning on dimly when wall switch is toggled.
 
 ### YAML Usage Examples
 
@@ -146,9 +190,9 @@ const config = {
 export default config
 ```
 
-#### Example 3: Dimmable Companion Bulbs
+#### Example 3: Synced Entity Fixtures
 
-When a wall switch controls power to a smart bulb, pair them so the UI shows the switch with the bulb's dimming controls:
+When a wall switch/relay controls power to smart bulbs, configure them as synced fixtures:
 
 ```javascript
 const config = {
@@ -158,17 +202,30 @@ const config = {
 
   areas: {
     bedroom: {
-      // Wall switch powers a Hue bulb
-      // UI shows switch.mb_soc with light.mb_soc_bulb's brightness slider
-      dimmable_companions: {
-        'switch.mb_soc': 'light.mb_soc_bulb',
+      // Wall switch always powered, bulb needs sync
+      syncedEntities: {
+        mb_standing_lamp: {
+          name: 'Bedroom Standing Lamp',
+          power: null,  // Switch doesn't cut power to bulb
+          entities: [
+            { entity_id: 'switch.mb_soc', sync: true },
+            { entity_id: 'light.mb_soc_bulb', sync: true, controls: 'dimmable' },
+          ],
+        },
       },
     },
 
     office: {
-      // Wall dimmer paired with IKEA bulbs
-      dimmable_companions: {
-        'light.ofc_lt_walls': 'light.ofc_lt_wall_bulbs',
+      // KNX relay controls power to IKEA bulbs
+      syncedEntities: {
+        ofc_wall_light: {
+          name: 'Office Wall Light',
+          power: 'light.ofc_lt_walls',  // Generates template light with boot-wait
+          entities: [
+            { entity_id: 'light.ofc_lt_walls', sync: true },
+            { entity_id: 'light.ofc_lt_wall_bulbs', sync: true, controls: 'tunable' },
+          ],
+        },
       },
     },
   },
@@ -287,18 +344,32 @@ const config = {
 
     bedroom: {
       vacancy_timer_duration: '00:05:00',
-      dimmable_companions: {
-        'switch.mb_soc': 'light.mb_soc_bulb',
-      },
       exclude_from_group: ['light.mb_nightlight'],
+      syncedEntities: {
+        mb_standing_lamp: {
+          name: 'Bedroom Standing Lamp',
+          power: null,
+          entities: [
+            { entity_id: 'switch.mb_soc', sync: true },
+            { entity_id: 'light.mb_soc_bulb', sync: true, controls: 'dimmable' },
+          ],
+        },
+      },
     },
 
     office: {
       vacancy_timer_duration: '00:30:00',
-      dimmable_companions: {
-        'light.ofc_lt_walls': 'light.ofc_lt_wall_bulbs',
-      },
       include_in_group: ['switch.ofc_monitor_lights'],
+      syncedEntities: {
+        ofc_wall_light: {
+          name: 'Office Wall Light',
+          power: 'light.ofc_lt_walls',
+          entities: [
+            { entity_id: 'light.ofc_lt_walls', sync: true },
+            { entity_id: 'light.ofc_lt_wall_bulbs', sync: true, controls: 'tunable' },
+          ],
+        },
+      },
     },
 
     bathroom: {
@@ -797,27 +868,30 @@ areas: {
 
 ### Pattern: Smart Bulb Behind Switch
 
-Wall switch powers a smart bulb - show switch in UI with bulb's dimming:
+Wall switch powers a smart bulb - use syncedEntities for bidirectional sync:
 
 ```javascript
 // generator.config.js
 areas: {
   bedroom: {
-    dimmable_companions: {
-      'switch.mb_soc': 'light.mb_soc_bulb',
+    syncedEntities: {
+      mb_standing_lamp: {
+        name: 'Bedroom Standing Lamp',
+        power: null,  // or 'switch.mb_soc' if switch cuts power
+        entities: [
+          { entity_id: 'switch.mb_soc', sync: true },
+          { entity_id: 'light.mb_soc_bulb', sync: true, controls: 'dimmable' },
+        ],
+      },
     },
   },
 }
 ```
 
-```javascript
-// dashboards/shared.js - automatically handled, companion bulb hidden
-areas: {
-  bedroom: {
-    included_lights: ['switch.mb_soc'],  // Show switch with dimming
-  },
-}
-```
+This generates:
+- Sync automation: toggling switch also toggles bulb (and vice versa)
+- Dashboard shows fixture with bulb's brightness slider, tap toggles switch
+- All entities excluded from light group (fixture shown instead)
 
 ### Pattern: Parental Controls
 
@@ -895,8 +969,15 @@ const config = {
       exclude_from_group: ['light.example'],
       excluded_labels: [],
       included_labels: ['outdoor'],
-      dimmable_companions: {
-        'switch.actuator': 'light.bulb',
+      syncedEntities: {
+        fixture_id: {
+          name: 'Fixture Name',
+          power: null,  // or 'light.power_relay'
+          entities: [
+            { entity_id: 'switch.actuator', sync: true },
+            { entity_id: 'light.bulb', sync: true, controls: 'dimmable' },
+          ],
+        },
       },
     },
   },

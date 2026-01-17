@@ -24,16 +24,14 @@ export function render(areaDataList, config, translator = null) {
 	const popupCards = []
 
 	for (const areaData of areaDataList) {
-		const { area, prefix, visibleToUsers } = areaData
+		const previewCard = buildPreviewCard({ areaData, defaultSceneSuffix, t })
+		previewCards.push(wrapWithUserCondition(previewCard, areaData.visibleToUsers))
 
-		const previewCard = buildPreviewCard(area, prefix, areaData, defaultSceneSuffix, t)
-		previewCards.push(wrapWithUserCondition(previewCard, visibleToUsers))
+		const detailsPopup = buildDetailsPopup({ areaData, defaultSceneSuffix, t })
+		popupCards.push(wrapWithUserCondition(detailsPopup, areaData.visibleToUsers))
 
-		const detailsPopup = buildDetailsPopup(area, prefix, areaData, defaultSceneSuffix, t)
-		popupCards.push(wrapWithUserCondition(detailsPopup, visibleToUsers))
-
-		const userNote = visibleToUsers ? ` (${visibleToUsers.length} users)` : ''
-		console.log(`  ✓ ${area.name}${userNote}`)
+		const userNote = areaData.visibleToUsers ? ` (${areaData.visibleToUsers.length} users)` : ''
+		console.log(`  ✓ ${areaData.area.name}${userNote}`)
 	}
 
 	const cards = [...previewCards, ...popupCards]
@@ -53,8 +51,8 @@ export function render(areaDataList, config, translator = null) {
 	}
 }
 
-function buildPreviewCard(area, prefix, areaData, defaultSceneSuffix, t) {
-	const { lightGroup, acEntity, fanEntity } = areaData
+function buildPreviewCard({ areaData, defaultSceneSuffix, t }) {
+	const { area, prefix, lightGroup, acEntity, fanEntity } = areaData
 	const popupHash = `#${prefix}details`
 	const defaultScene = `scene.${prefix}${defaultSceneSuffix}`
 
@@ -111,8 +109,8 @@ function buildPreviewCard(area, prefix, areaData, defaultSceneSuffix, t) {
 	return card
 }
 
-function buildDetailsPopup(area, prefix, areaData, defaultSceneSuffix, t) {
-	const { lightGroup, scenes, lights, acEntity, fanEntity, otherEntities } = areaData
+function buildDetailsPopup({ areaData, defaultSceneSuffix, t }) {
+	const { area, prefix, lightGroup, scenes, lights, acEntity, fanEntity, otherEntities } = areaData
 	const popupHash = `#${prefix}details`
 	const defaultScene = `scene.${prefix}${defaultSceneSuffix}`
 

@@ -51,10 +51,8 @@ function buildMainView(areaDataList, dashboardName, dashboardPath, defaultSceneS
 	cards.push({ type: 'heading', heading: t.ui('heading.areas') })
 
 	for (const areaData of areaDataList) {
-		const { area, prefix, visibleToUsers } = areaData
-
-		const previewCard = buildPreviewCard(area, prefix, areaData, dashboardPath, defaultSceneSuffix, t)
-		cards.push(wrapWithUserCondition(previewCard, visibleToUsers))
+		const previewCard = buildPreviewCard({ areaData, dashboardPath, defaultSceneSuffix, t })
+		cards.push(wrapWithUserCondition(previewCard, areaData.visibleToUsers))
 	}
 
 	return {
@@ -229,8 +227,8 @@ function buildHeaderCard(area, lightGroup, dashboardPath, defaultScene, t) {
 	}
 }
 
-function buildPreviewCard(area, prefix, areaData, dashboardPath, defaultSceneSuffix, t) {
-	const { lightGroup, acEntity, fanEntity } = areaData
+function buildPreviewCard({ areaData, dashboardPath, defaultSceneSuffix, t }) {
+	const { area, prefix, lightGroup, acEntity, fanEntity } = areaData
 	const areaPath = area.id.replace(/_/g, '-')
 	const defaultScene = `scene.${prefix}${defaultSceneSuffix}`
 

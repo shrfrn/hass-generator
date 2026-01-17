@@ -3,6 +3,62 @@
 
 import type { AreaId, EntityId, LabelId } from './hass.d.ts'
 
+// ─────────────────────────────────────────────────────────────────────────────
+// SYNCED ENTITIES TYPES
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Light control capabilities */
+export type LightControl = 'on' | 'off' | 'brightness' | 'color_temp' | 'rgb' | 'hs' | 'xy' | 'effect'
+
+/** Shorthand strings for common control sets */
+export type ControlsShorthand = 'toggle' | 'dimmable' | 'tunable' | 'rgb'
+
+/** Remote dimming configuration */
+export interface DimConfig {
+  targets: EntityId[]
+  style: 'hold' | 'step'
+  step_percent: number
+}
+
+/** Entity within a synced fixture */
+export interface SyncedEntity {
+  /** Entity ID */
+  entity_id: EntityId
+
+  /** Whether this entity participates in bidirectional sync */
+  sync: boolean
+
+  /**
+   * Control capabilities for this entity.
+   * @default ['on', 'off']
+   */
+  controls?: LightControl[] | ControlsShorthand
+
+  /** Remote dimming configuration (for remotes/buttons) */
+  dim?: DimConfig
+}
+
+/** A fixture grouping multiple entities that should sync together */
+export interface SyncedFixture {
+  /** Human-readable name for the fixture */
+  name: string
+
+  /**
+   * Power control entity ID, or null if always powered.
+   * - If set: generates a template light with boot-wait logic
+   * - If null + multiple dimmables: generates a light group
+   * - If null + single dimmable: uses the bulb directly
+   */
+  power: EntityId | null
+
+  /** Entities in this fixture */
+  entities: SyncedEntity[]
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// AREA CONFIG
+// ─────────────────────────────────────────────────────────────────────────────
+
 export interface AreaConfig {
   /** Override vacancy timer duration for this area */
   vacancy_timer_duration?: string
@@ -23,9 +79,16 @@ export interface AreaConfig {
    * Maps on/off actuators to their companion dimmable bulbs.
    * The actuator controls power, the bulb controls brightness.
    * Companion bulbs are auto-excluded from light groups and dashboard lists.
+   * @deprecated Use syncedEntities instead for more control
    * @example { 'switch.mb_soc': 'light.mb_soc_bulb' }
    */
   dimmable_companions?: Partial<Record<EntityId, EntityId>>
+
+  /**
+   * Synced entity fixtures for this area.
+   * Generates sync automations, template lights, and/or light groups.
+   */
+  syncedEntities?: Record<string, SyncedFixture>
 }
 
 export interface GeneratorConfig {

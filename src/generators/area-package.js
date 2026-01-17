@@ -21,7 +21,8 @@ export async function generateAreaPackages(inventory, config, packagesDir) {
 			continue
 		}
 
-		const { pkg, includeExcludeInfo } = buildAreaPackage(area, entities, scenes, areaConfig, config, prefix)
+		const ctx = { area, entities, scenes, areaConfig, globalConfig: config, prefix }
+		const { pkg, includeExcludeInfo } = buildAreaPackage(ctx)
 		const fileName = `${prefix}${sanitizeFileName(area.id)}.yaml`
 		const filePath = join(areasDir, fileName)
 		const header = generateHeader(area.name, prefix, includeExcludeInfo)
@@ -35,71 +36,45 @@ export async function generateAreaPackages(inventory, config, packagesDir) {
 }
 
 
-function buildAreaPackage(area, entities, scenes, areaConfig, globalConfig, prefix) {
-	const pkg = {}
+function buildAreaPackage(ctx) {
+	const { area, entities, scenes, areaConfig, globalConfig, prefix } = ctx
+	const { lightGroup, included, excluded } = buildLightGroup({ area, entities, areaConfig, globalConfig })
 
-	// Light group with include/exclude tracking
-	const { lightGroup, included, excluded } = buildLightGroup(area, entities, areaConfig, globalConfig, prefix)
-
-	if (lightGroup) {
-		pkg.group = { [`${prefix}lights`]: lightGroup }
+	const pkg = {
+		...buildLightGroupSection(lightGroup, prefix),
+		input_select: { [`${prefix}active_scene`]: buildSceneSelector(area, getAreaScenes(scenes, prefix)) },
+		input_datetime: { [`${prefix}last_presence`]: { name: `${area.name} Last Presence`, has_date: true, has_time: true } },
+		input_boolean: { [`${prefix}pause_automations`]: { name: `${area.name} Pause Automations`, icon: 'mdi:pause-circle' } },
+		timer: { [`${prefix}vacancy`]: buildVacancyTimer(area, areaConfig, globalConfig) },
+		...buildSyncedEntitiesSection(areaConfig.syncedEntities),
 	}
 
-	// Scene selector
-	const areaScenes = getAreaScenes(scenes, prefix)
-	pkg.input_select = {
-		[`${prefix}active_scene`]: buildSceneSelector(area, areaScenes),
-	}
-
-	// Last presence timestamp
-	pkg.input_datetime = {
-		[`${prefix}last_presence`]: {
-			name: `${area.name} Last Presence`,
-			has_date: true,
-			has_time: true,
-		},
-	}
-
-	// Pause automations boolean
-	pkg.input_boolean = {
-		[`${prefix}pause_automations`]: {
-			name: `${area.name} Pause Automations`,
-			icon: 'mdi:pause-circle',
-		},
-	}
-
-	// Vacancy timer
-	const duration = areaConfig.vacancy_timer_duration || globalConfig.default_vacancy_duration || '00:10:00'
-	pkg.timer = {
-		[`${prefix}vacancy`]: {
-			name: `${area.name} Vacancy Timer`,
-			duration,
-		},
-	}
-
-	// Process synced entities (templates, light groups, automations)
-	if (areaConfig.syncedEntities) {
-		const { templates, lightGroups, automations } = processSyncedEntities(areaConfig.syncedEntities)
-
-		if (templates.length > 0) {
-			pkg.template = templates
-		}
-
-		if (lightGroups.length > 0) {
-			pkg.light = lightGroups
-		}
-
-		if (automations.length > 0) {
-			pkg.automation = automations
-		}
-	}
-
-	const includeExcludeInfo = { included, excluded }
-
-	return { pkg, includeExcludeInfo }
+	return { pkg, includeExcludeInfo: { included, excluded } }
 }
 
-function buildLightGroup(area, entities, areaConfig, globalConfig, _prefix) {
+function buildLightGroupSection(lightGroup, prefix) {
+	return lightGroup ? { group: { [`${prefix}lights`]: lightGroup } } : {}
+}
+
+function buildVacancyTimer(area, areaConfig, globalConfig) {
+	const duration = areaConfig.vacancy_timer_duration || globalConfig.default_vacancy_duration || '00:10:00'
+	return { name: `${area.name} Vacancy Timer`, duration }
+}
+
+function buildSyncedEntitiesSection(syncedEntities) {
+	if (!syncedEntities) return {}
+
+	const { templates, lightGroups, automations } = processSyncedEntities(syncedEntities)
+	const result = {}
+
+	if (templates.length > 0) result.template = templates
+	if (lightGroups.length > 0) result.light = lightGroups
+	if (automations.length > 0) result.automation = automations
+
+	return result
+}
+
+function buildLightGroup({ area, entities, areaConfig, globalConfig }) {
 	const includes = areaConfig.include_in_group || []
 	const includeSet = new Set(includes)
 	const excludeList = areaConfig.exclude_from_group || []

@@ -12,8 +12,8 @@
     "templates/"
   ],
   "scripts": {
-    "lint": "eslint src/",
-    "lint:fix": "eslint src/ --fix",
+    "lint": "eslint src/ tests/ *.config.js",
+    "lint:fix": "eslint src/ tests/ *.config.js --fix",
     "test": "vitest run",
     "test:watch": "vitest"
   },

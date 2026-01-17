@@ -11,6 +11,13 @@ export default [
 				console: 'readonly',
 				process: 'readonly',
 				URL: 'readonly',
+				// Vitest globals
+				describe: 'readonly',
+				test: 'readonly',
+				expect: 'readonly',
+				beforeEach: 'readonly',
+				afterEach: 'readonly',
+				vi: 'readonly',
 			},
 		},
 		rules: {
