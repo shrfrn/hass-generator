@@ -326,14 +326,17 @@ function buildLightsGrid(lights, t) {
 }
 
 function buildLightCard(light, t) {
-	const { dimmable, brightness_entity, toggle_entity, has_advanced_controls } = light
+	const { dimmable, brightness_entity, toggle_entity, has_advanced_controls, is_synced_fixture } = light
+
+	// For synced fixtures, use the fixture name directly without translation lookup
+	const displayName = is_synced_fixture ? light.name : t.entity(light.entity_id, light.name)
 
 	const card = {
 		type: 'custom:bubble-card',
 		card_type: 'button',
 		button_type: dimmable ? 'slider' : 'switch',
 		entity: brightness_entity,
-		name: t.entity(light.entity_id, light.name),
+		name: displayName,
 		scrolling_effect: true,
 	}
 

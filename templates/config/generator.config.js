@@ -37,11 +37,18 @@ const config = {
   //     excluded_labels: [],                     // Clear global exclusions for this area
   //     included_labels: ['outdoor'],            // Include outdoor lights in this area
   //
-  //     // On/off actuator + dimmable smart bulb pairings
-  //     // The actuator (key) is shown in UI with slider controlling the bulb (value)
-  //     // Companion bulbs are auto-excluded from light groups and dashboard
-  //     dimmable_companions: {
-  //       'light.kt_lt_wall': 'light.kt_hue_bulb',
+  //     // Synced entity fixtures - generates sync automations, template lights, and groups
+  //     // Controls shorthand: 'dimmable', 'tunable', 'rgb', or explicit array
+  //     // Note: Configure Z2M power-on brightness to prevent dim starts
+  //     syncedEntities: {
+  //       kt_wall_light: {
+  //         name: 'Kitchen Wall Light',
+  //         power: 'light.kt_lt_wall',  // null = always on, entity_id = generates template
+  //         entities: [
+  //           { entity_id: 'light.kt_lt_wall', sync: true },  // Power relay
+  //           { entity_id: 'light.kt_hue_bulb', sync: true, controls: 'dimmable' },
+  //         ],
+  //       },
   //     },
   //   },
 

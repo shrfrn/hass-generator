@@ -2,6 +2,63 @@
 // These types define the SHAPE of configs and are stable across installations
 // Instance-specific types (AreaId, EntityId) stay in each installation's hass-config
 
+// ─────────────────────────────────────────────────────────────────────────────
+// SYNCED ENTITIES TYPES
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Light control capabilities */
+export type LightControl = 'on' | 'off' | 'brightness' | 'color_temp' | 'rgb' | 'hs' | 'xy' | 'effect'
+
+/** Shorthand strings for common control sets */
+export type ControlsShorthand = 'toggle' | 'dimmable' | 'tunable' | 'rgb'
+
+/** Remote dimming configuration */
+export interface DimConfig {
+	targets: string[]
+	style: 'hold' | 'step'
+	step_percent: number
+}
+
+/** Entity within a synced fixture */
+export interface SyncedEntity {
+	/** Entity ID (e.g., 'light.mb_soc_bulb') */
+	entity_id: string
+
+	/** Whether this entity participates in bidirectional sync */
+	sync: boolean
+
+	/**
+	 * Control capabilities for this entity.
+	 * Determines what template actions are generated.
+	 * @default ['on', 'off']
+	 */
+	controls?: LightControl[] | ControlsShorthand
+
+	/** Remote dimming configuration (for remotes/buttons) */
+	dim?: DimConfig
+}
+
+/** A fixture grouping multiple entities that should sync together */
+export interface SyncedFixture {
+	/** Human-readable name for the fixture */
+	name: string
+
+	/**
+	 * Power control entity ID, or null if always powered.
+	 * - If set: generates a template light with boot-wait logic
+	 * - If null + multiple dimmables: generates a light group
+	 * - If null + single dimmable: uses the bulb directly
+	 */
+	power: string | null
+
+	/** Entities in this fixture */
+	entities: SyncedEntity[]
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// AREA CONFIG
+// ─────────────────────────────────────────────────────────────────────────────
+
 export interface AreaConfig {
   /** Override vacancy timer duration for this area */
   vacancy_timer_duration?: string
@@ -22,9 +79,28 @@ export interface AreaConfig {
    * Maps on/off actuators to their companion dimmable bulbs.
    * The actuator controls power, the bulb controls brightness.
    * Companion bulbs are auto-excluded from light groups and dashboard lists.
+   * @deprecated Use syncedEntities instead for more control
    * @example { 'switch.mb_soc': 'light.mb_soc_bulb' }
    */
   dimmable_companions?: Record<string, string>
+
+  /**
+   * Synced entity fixtures for this area.
+   * Generates sync automations, template lights, and/or light groups.
+   * Replaces dimmable_companions with more granular control.
+   * @example
+   * {
+   *   mb_standing_lamp: {
+   *     name: 'Master Bedroom Standing Lamp',
+   *     power: null,
+   *     entities: [
+   *       { entity_id: 'switch.mb_soc', sync: true },
+   *       { entity_id: 'light.mb_soc_bulb', sync: true, controls: 'dimmable' },
+   *     ],
+   *   },
+   * }
+   */
+  syncedEntities?: Record<string, SyncedFixture>
 }
 
 export interface GeneratorConfig {

@@ -3,6 +3,7 @@ import { join } from 'path'
 import { writeYamlFile, generateHeader } from './yaml-utils.js'
 import { extractPrefix } from '../utils/entity.js'
 import { sanitizeFileName } from '../utils/strings.js'
+import { processSyncedEntities, getSyncedEntityIds } from './synced-entities.js'
 
 export async function generateAreaPackages(inventory, config, packagesDir) {
 	const { areas, entities, scenes } = inventory
@@ -76,6 +77,23 @@ function buildAreaPackage(area, entities, scenes, areaConfig, globalConfig, pref
 		},
 	}
 
+	// Process synced entities (templates, light groups, automations)
+	if (areaConfig.syncedEntities) {
+		const { templates, lightGroups, automations } = processSyncedEntities(areaConfig.syncedEntities)
+
+		if (templates.length > 0) {
+			pkg.template = templates
+		}
+
+		if (lightGroups.length > 0) {
+			pkg.light = lightGroups
+		}
+
+		if (automations.length > 0) {
+			pkg.automation = automations
+		}
+	}
+
 	const includeExcludeInfo = { included, excluded }
 
 	return { pkg, includeExcludeInfo }
@@ -87,9 +105,12 @@ function buildLightGroup(area, entities, areaConfig, globalConfig, _prefix) {
 	const excludeList = areaConfig.exclude_from_group || []
 	const excludeSet = new Set(excludeList)
 
-	// Companion bulbs are controlled via their actuator - exclude from group
+	// Companion bulbs are controlled via their actuator - exclude from group (legacy)
 	const dimmableCompanions = areaConfig.dimmable_companions || {}
 	const companionBulbs = new Set(Object.values(dimmableCompanions))
+
+	// Synced entities are controlled via generated templates/groups - exclude from group
+	const syncedEntityIds = areaConfig.syncedEntities ? getSyncedEntityIds(areaConfig.syncedEntities) : new Set()
 
 	// Determine which labels to exclude (area overrides global, no hardcoded defaults)
 	const globalExcludedLabels = globalConfig.excluded_labels || []
@@ -103,6 +124,7 @@ function buildLightGroup(area, entities, areaConfig, globalConfig, _prefix) {
 	const areaLights = entities
 		.filter(e => e.area_id === area.id && e.domain === 'light')
 		.filter(e => !companionBulbs.has(e.entity_id))
+		.filter(e => !syncedEntityIds.has(e.entity_id))
 		.filter(e => {
 			const entityLabels = e.labels || []
 

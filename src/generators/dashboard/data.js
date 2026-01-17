@@ -3,6 +3,7 @@
 // This module is template-agnostic - it prepares area data that any template can use
 
 import { extractPrefix } from '../../utils/entity.js'
+import { getDashboardEntity, getSyncedEntityIds, resolveControls } from '../synced-entities.js'
 
 /**
  * @typedef {Object} InventoryContext
@@ -23,7 +24,9 @@ import { extractPrefix } from '../../utils/entity.js'
  * @typedef {Object} ConfigContext
  * @property {Set} excludedLights - Light entity IDs to exclude
  * @property {Array} includedLights - Light entity IDs to include
- * @property {Object} dimmableCompanions - Map of actuator -> companion bulb
+ * @property {Object} dimmableCompanions - Map of actuator -> companion bulb (legacy)
+ * @property {Object} syncedEntities - Synced entity fixtures
+ * @property {Set} syncedEntityIds - All entity IDs in synced fixtures
  * @property {Set} excludedScenes - Scene entity IDs to exclude
  * @property {Array} includedScenes - Scene entity IDs to include from other areas
  */
@@ -79,10 +82,14 @@ function buildAreaContext(area, prefix, inventoryCtx) {
  * @returns {ConfigContext}
  */
 function buildConfigContext(dashboardAreaConfig, generatorAreaConfig) {
+	const syncedEntities = generatorAreaConfig.syncedEntities || {}
+
 	return {
 		excludedLights: new Set(dashboardAreaConfig.excluded_lights || []),
 		includedLights: dashboardAreaConfig.included_lights || [],
 		dimmableCompanions: generatorAreaConfig.dimmable_companions || {},
+		syncedEntities,
+		syncedEntityIds: getSyncedEntityIds(syncedEntities),
 		excludedScenes: new Set(dashboardAreaConfig.excluded_scenes || []),
 		includedScenes: dashboardAreaConfig.included_scenes || [],
 	}
@@ -169,12 +176,12 @@ function sortAreas(areas, pinnedAreas, excludedAreas) {
  */
 function buildAreaData(areaCtx, configCtx, inventoryCtx) {
 	const { prefix, entities, scenes } = areaCtx
-	const { excludedLights, includedLights, dimmableCompanions, excludedScenes, includedScenes } = configCtx
+	const { excludedLights, includedLights, dimmableCompanions, syncedEntities, syncedEntityIds, excludedScenes, includedScenes } = configCtx
 
 	const lightGroup = `group.${prefix}lights`
 	const acEntity = findAcEntity(entities)
 	const fanEntity = findFanEntity(entities)
-	const lights = buildLightsList(entities, excludedLights, includedLights, dimmableCompanions)
+	const lights = buildLightsList(entities, excludedLights, includedLights, dimmableCompanions, syncedEntities, syncedEntityIds)
 	const otherEntities = buildOtherList(entities, lights, acEntity, fanEntity, configCtx)
 	const scenesList = buildScenesList(scenes, excludedScenes, includedScenes, inventoryCtx.allScenes)
 
@@ -207,15 +214,39 @@ function findFanEntity(entities) {
 	return fanSwitch?.entity_id || null
 }
 
-function buildLightsList(entities, excludedLights, includedLights, dimmableCompanions) {
+function buildLightsList(entities, excludedLights, includedLights, dimmableCompanions, syncedEntities, syncedEntityIds) {
 	const includedSet = new Set(includedLights)
 	const companionBulbs = new Set(Object.values(dimmableCompanions))
 
 	const result = []
 
-	// Add explicitly included lights first
+	// Add synced fixtures as dashboard entities first
+	for (const [fixtureId, fixture] of Object.entries(syncedEntities)) {
+		const dashboardInfo = getDashboardEntity(fixtureId, fixture)
+
+		// Determine if fixture has advanced controls (color_temp, rgb, etc.)
+		const dimmables = fixture.entities.filter(e => {
+			const controls = resolveControls(e.controls)
+			return controls.includes('brightness')
+		})
+		const primaryControls = dimmables[0] ? resolveControls(dimmables[0].controls) : ['on', 'off']
+		const hasAdvancedControls = primaryControls.some(c => ['color_temp', 'rgb', 'hs', 'xy'].includes(c))
+
+		result.push({
+			entity_id: dashboardInfo.entity_id,
+			name: fixture.name,
+			dimmable: dashboardInfo.dimmable,
+			brightness_entity: dashboardInfo.entity_id,
+			toggle_entity: dashboardInfo.toggle_entity,
+			has_advanced_controls: hasAdvancedControls,
+			is_synced_fixture: true, // Use fixture name directly, skip translation lookup
+		})
+	}
+
+	// Add explicitly included lights
 	for (const entityId of includedLights) {
 		if (companionBulbs.has(entityId)) continue
+		if (syncedEntityIds.has(entityId)) continue
 
 		const entity = entities.find(e => e.entity_id === entityId)
 
@@ -226,12 +257,13 @@ function buildLightsList(entities, excludedLights, includedLights, dimmableCompa
 		}
 	}
 
-	// Add area lights (excluding already included and companions)
+	// Add area lights (excluding already included, companions, and synced)
 	const areaLights = entities.filter(e =>
 		e.domain === 'light' &&
 		!excludedLights.has(e.entity_id) &&
 		!includedSet.has(e.entity_id) &&
-		!companionBulbs.has(e.entity_id),
+		!companionBulbs.has(e.entity_id) &&
+		!syncedEntityIds.has(e.entity_id),
 	)
 
 	result.push(...areaLights.map(e => enrichWithDimming(e, dimmableCompanions)))
@@ -265,7 +297,7 @@ function enrichWithDimming(entity, dimmableCompanions) {
  * @returns {Array} Filtered entities for "other" section
  */
 function buildOtherList(entities, lightsInSection, acEntity, fanEntity, configCtx) {
-	const { excludedLights, dimmableCompanions } = configCtx
+	const { excludedLights, dimmableCompanions, syncedEntityIds } = configCtx
 	const lightIds = new Set(lightsInSection.map(l => l.entity_id))
 	const companionBulbs = new Set(Object.values(dimmableCompanions))
 	const actuatorsWithCompanions = new Set(Object.keys(dimmableCompanions))
@@ -283,6 +315,7 @@ function buildOtherList(entities, lightsInSection, acEntity, fanEntity, configCt
 		if (lightIds.has(e.entity_id)) return false
 		if (companionBulbs.has(e.entity_id)) return false
 		if (actuatorsWithCompanions.has(e.entity_id)) return false
+		if (syncedEntityIds.has(e.entity_id)) return false
 		if (e.entity_id === acEntity || e.entity_id === fanEntity) return false
 		if (excludeDomains.includes(e.domain)) return false
 
