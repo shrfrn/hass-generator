@@ -12,31 +12,55 @@ export type LightControl = 'on' | 'off' | 'brightness' | 'color_temp' | 'rgb' | 
 /** Shorthand strings for common control sets */
 export type ControlsShorthand = 'toggle' | 'dimmable' | 'tunable' | 'rgb'
 
-/** Remote dimming configuration */
+/** Dimming behavior configuration */
 export interface DimConfig {
-	targets: string[]
-	style: 'hold' | 'step'
-	step_percent: number
+	/** Dimming style: 'step' for discrete steps, 'hold' for continuous while holding */
+	style: 'step' | 'hold'
+
+	/** Step percentage for step dimming (default: 10) */
+	step_percent?: number
+
+	/** Transition duration in seconds for hold dimming (default: 4) */
+	transition?: number
 }
 
-/** Entity within a synced fixture */
+/** Element identified by entity_id (lights, switches, or remotes exposed as entities) */
 export interface SyncedEntity {
 	/** Entity ID (e.g., 'light.mb_soc_bulb') */
 	entity_id: string
 
-	/** Whether this entity participates in bidirectional sync */
+	/** Whether this element participates in bidirectional state sync */
 	sync: boolean
 
 	/**
-	 * Control capabilities for this entity.
+	 * Control capabilities for this element.
+	 * Determines what template actions are generated.
+	 * @default ['on', 'off']
+	 */
+	controls?: LightControl[] | ControlsShorthand
+}
+
+/** Element identified by device_id (remotes/buttons via device triggers) */
+export interface SyncedDevice {
+	/** Device ID for elements that use device triggers (e.g., IKEA remotes via Z2M) */
+	device_id: string
+
+	/** Whether this element participates in bidirectional state sync */
+	sync: boolean
+
+	/**
+	 * Control capabilities for this element.
 	 * Determines what template actions are generated.
 	 * @default ['on', 'off']
 	 */
 	controls?: LightControl[] | ControlsShorthand
 
-	/** Remote dimming configuration (for remotes/buttons) */
+	/** Dimming behavior configuration */
 	dim?: DimConfig
 }
+
+/** Element within a synced fixture - identified by entity_id or device_id */
+export type SyncedFixtureElement = SyncedEntity | SyncedDevice
 
 /** A fixture grouping multiple entities that should sync together */
 export interface SyncedFixture {
@@ -51,8 +75,8 @@ export interface SyncedFixture {
 	 */
 	power: string | null
 
-	/** Entities in this fixture */
-	entities: SyncedEntity[]
+	/** Elements in this fixture (entities and/or devices) */
+	entities: SyncedFixtureElement[]
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

@@ -215,9 +215,8 @@ describe('area-package.js', () => {
 			await generateAreaPackages(minimalInventory, config, TEST_DIR)
 
 			const content = readFileSync(join(TEST_DIR, 'areas/mb_bedroom.yaml'), 'utf8')
-			expect(content).toContain('template:')
-			expect(content).toContain('name: Bedroom Wall Light')
-			expect(content).toContain('unique_id: mb_wall_light')
+			expect(content).toContain('platform: template')
+			expect(content).toContain('friendly_name: Bedroom Wall Light')
 			expect(content).toContain('wait_template')
 		})
 	})
