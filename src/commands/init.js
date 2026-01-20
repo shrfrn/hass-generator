@@ -20,6 +20,7 @@ export async function init(destination) {
 
 	const files = [
 		// Config files (root)
+		{ src: 'config/.gitignore', dest: '.gitignore' },
 		{ src: 'config/generator.config.js', dest: 'generator.config.js' },
 		{ src: 'config/users.js', dest: 'users.js' },
 		{ src: 'config/package.json', dest: 'package.json' },
@@ -28,6 +29,15 @@ export async function init(destination) {
 
 		// Dashboard config (dashboards/)
 		{ src: 'config/dashboard.config.js', dest: 'dashboards/main.config.js' },
+		{ src: 'config/dashboard.shared.js', dest: 'dashboards/shared.js' },
+
+		// i18n translation files
+		{ src: 'i18n/areas.csv', dest: 'i18n/areas.csv' },
+		{ src: 'i18n/entities.csv', dest: 'i18n/entities.csv' },
+		{ src: 'i18n/ui-strings.csv', dest: 'i18n/ui-strings.csv' },
+
+		// TypeScript types for inventory
+		{ src: 'config/inventory/types/config.d.ts', dest: 'inventory/types/config.d.ts' },
 
 		// Shell scripts (scripts/)
 		{ src: 'scripts/deploy.sh', dest: 'scripts/deploy.sh', executable: true },
