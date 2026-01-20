@@ -21,6 +21,10 @@ export function ikeaE2201DblClick(lightEntityId, overrides = {}) {
 			button_up_long_max_loop_repeats: 50,
 			button_down_long_max_loop_repeats: 50,
 
+			// Enable virtual double-press detection
+			button_up_double_press_exposed: true,
+			button_down_double_press_exposed: true,
+
 			action_button_up_short: [
 				{ service: 'light.turn_on', target: { entity_id: lightEntityId } },
 			],
