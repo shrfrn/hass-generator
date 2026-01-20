@@ -58,6 +58,33 @@ export function getDeviceEntities(fixture) {
 }
 
 /**
+ * Get devices that use blueprints
+ * @param {import('../types/config.d.ts').SyncedDevice[]} devices
+ * @returns {import('../types/config.d.ts').SyncedDevice[]}
+ */
+export function getBlueprintDevices(devices) {
+	return devices.filter(d => 'blueprint' in d && d.blueprint)
+}
+
+/**
+ * Get devices that use dim config (generator-built automations)
+ * @param {import('../types/config.d.ts').SyncedDevice[]} devices
+ * @returns {import('../types/config.d.ts').SyncedDevice[]}
+ */
+export function getDimDevices(devices) {
+	return devices.filter(d => 'dim' in d && d.dim)
+}
+
+/**
+ * Get devices that use on/off only (no dim or blueprint)
+ * @param {import('../types/config.d.ts').SyncedDevice[]} devices
+ * @returns {import('../types/config.d.ts').SyncedDevice[]}
+ */
+export function getOnOffDevices(devices) {
+	return devices.filter(d => !('dim' in d && d.dim) && !('blueprint' in d && d.blueprint))
+}
+
+/**
  * Determine what dashboard entity to use for a fixture
  * @param {string} fixtureId
  * @param {import('../types/config.d.ts').SyncedFixture} fixture
@@ -209,114 +236,161 @@ export function generateLightGroup(fixtureId, fixture) {
 }
 
 /**
+ * Generate blueprint automation for a device
+ * @param {string} fixtureId
+ * @param {import('../types/config.d.ts').SyncedFixture} fixture
+ * @param {import('../types/config.d.ts').SyncedDevice} device
+ * @param {number} deviceIndex
+ * @returns {object}
+ */
+function generateBlueprintAutomation(fixtureId, fixture, device, deviceIndex) {
+	const blueprint = /** @type {import('../types/config.d.ts').BlueprintConfig} */ (device.blueprint)
+	const suffix = deviceIndex > 0 ? `_${deviceIndex}` : ''
+
+	return {
+		id: `blueprint_${fixtureId}${suffix}`,
+		alias: `${fixture.name} Remote${suffix ? ` ${deviceIndex + 1}` : ''}`,
+		use_blueprint: {
+			path: blueprint.path,
+			input: {
+				controller_device: device.device_id,
+				...blueprint.input,
+			},
+		},
+	}
+}
+
+/**
  * Generate unified automation for fixture sync and remote control
  * Handles entity state sync and remote device triggers in one automation
  * @param {string} fixtureId
  * @param {import('../types/config.d.ts').SyncedFixture} fixture
- * @returns {object | null}
+ * @returns {object[] | null}
  */
 export function generateSyncAutomation(fixtureId, fixture) {
 	const syncEntities = getSyncEntities(fixture)
 	const deviceEntities = getDeviceEntities(fixture)
 	const hasSyncEntities = syncEntities.length >= 2
-	const hasDevices = deviceEntities.length > 0
 
-	if (!hasSyncEntities && !hasDevices) return null
+	// Separate devices by control type
+	const blueprintDevices = getBlueprintDevices(deviceEntities)
+	const dimDevices = getDimDevices(deviceEntities)
+	const onOffDevices = getOnOffDevices(deviceEntities)
+
+	// Devices that need generator-built triggers (dim + on/off only)
+	const generatorDevices = [...dimDevices, ...onOffDevices]
+	const hasGeneratorDevices = generatorDevices.length > 0
+
+	if (!hasSyncEntities && !hasGeneratorDevices && blueprintDevices.length === 0) return null
 
 	const dashboardEntity = getDashboardEntity(fixtureId, fixture)
 	const dimmables = getDimmableEntities(fixture)
 	const hasDimmable = dimmables.length > 0
 
-	const triggers = []
-	const choices = []
+	const automations = []
 
-	// Entity state sync triggers
-	if (hasSyncEntities) {
-		const entityIds = syncEntities.map(e => e.entity_id)
+	// Generate blueprint automations first
+	blueprintDevices.forEach((device, idx) => {
+		automations.push(generateBlueprintAutomation(fixtureId, fixture, device, idx))
+	})
 
-		triggers.push({
-			platform: 'state',
-			entity_id: entityIds,
-			to: ['on', 'off'],
-			id: 'entity_sync',
-		})
+	// Only generate sync automation if there are sync entities or generator devices
+	if (hasSyncEntities || hasGeneratorDevices) {
+		const triggers = []
+		const choices = []
 
-		choices.push({
-			conditions: [
-				{ condition: 'trigger', id: 'entity_sync' },
-				{ condition: 'template', value_template: '{{ trigger.to_state.state != trigger.from_state.state }}' },
-			],
-			sequence: [{
-				service: 'homeassistant.turn_{{ trigger.to_state.state }}',
-				target: {
-					entity_id: `{% set triggered = trigger.entity_id %}\n{% set all = ${JSON.stringify(entityIds)} %}\n{{ all | reject('eq', triggered) | list }}`,
-				},
-			}],
-		})
-	}
+		// Entity state sync triggers
+		if (hasSyncEntities) {
+			const entityIds = syncEntities.map(e => e.entity_id)
 
-	// Device triggers (remotes, buttons)
-	const dimStyle = deviceEntities[0]?.dim?.style || 'step'
-	const stepPercent = deviceEntities[0]?.dim?.step_percent || 10
+			triggers.push({
+				platform: 'state',
+				entity_id: entityIds,
+				to: ['on', 'off'],
+				id: 'entity_sync',
+			})
 
-	for (const device of deviceEntities) {
-		// On/Off triggers
-		triggers.push(
-			{ domain: 'mqtt', device_id: device.device_id, type: 'action', subtype: 'on', trigger: 'device', id: 'device_on' },
-			{ domain: 'mqtt', device_id: device.device_id, type: 'action', subtype: 'off', trigger: 'device', id: 'device_off' },
-		)
-
-		// Brightness triggers only for step mode (hold mode uses separate automation)
-		if (hasDimmable && dimStyle === 'step') {
-			triggers.push(
-				{ domain: 'mqtt', device_id: device.device_id, type: 'action', subtype: 'brightness_move_up', trigger: 'device', id: 'brightness_up' },
-				{ domain: 'mqtt', device_id: device.device_id, type: 'action', subtype: 'brightness_move_down', trigger: 'device', id: 'brightness_down' },
-			)
+			choices.push({
+				conditions: [
+					{ condition: 'trigger', id: 'entity_sync' },
+					{ condition: 'template', value_template: '{{ trigger.to_state.state != trigger.from_state.state }}' },
+				],
+				sequence: [{
+					service: 'homeassistant.turn_{{ trigger.to_state.state }}',
+					target: {
+						entity_id: `{% set triggered = trigger.entity_id %}\n{% set all = ${JSON.stringify(entityIds)} %}\n{{ all | reject('eq', triggered) | list }}`,
+					},
+				}],
+			})
 		}
-	}
 
-	// Device on/off actions
-	if (hasDevices) {
-		choices.push(
-			{
-				conditions: [{ condition: 'trigger', id: 'device_on' }],
-				sequence: [{ service: 'homeassistant.turn_on', target: { entity_id: dashboardEntity.toggle_entity } }],
-			},
-			{
-				conditions: [{ condition: 'trigger', id: 'device_off' }],
-				sequence: [{ service: 'homeassistant.turn_off', target: { entity_id: dashboardEntity.toggle_entity } }],
-			},
-		)
+		// Device triggers for generator-built devices (dim and on/off)
+		const dimStyle = dimDevices[0]?.dim?.style || 'step'
+		const stepPercent = dimDevices[0]?.dim?.step_percent || 10
 
-		// Step dimming actions (hold mode handled by separate automation)
-		if (hasDimmable && dimStyle === 'step') {
+		for (const device of generatorDevices) {
+			// On/Off triggers for all generator devices
+			triggers.push(
+				{ domain: 'mqtt', device_id: device.device_id, type: 'action', subtype: 'on', trigger: 'device', id: 'device_on' },
+				{ domain: 'mqtt', device_id: device.device_id, type: 'action', subtype: 'off', trigger: 'device', id: 'device_off' },
+			)
+
+			// Brightness triggers only for dim devices in step mode
+			const hasDim = 'dim' in device && device.dim
+			if (hasDimmable && hasDim && dimStyle === 'step') {
+				triggers.push(
+					{ domain: 'mqtt', device_id: device.device_id, type: 'action', subtype: 'brightness_move_up', trigger: 'device', id: 'brightness_up' },
+					{ domain: 'mqtt', device_id: device.device_id, type: 'action', subtype: 'brightness_move_down', trigger: 'device', id: 'brightness_down' },
+				)
+			}
+		}
+
+		// Device on/off actions
+		if (hasGeneratorDevices) {
 			choices.push(
 				{
-					conditions: [{ condition: 'trigger', id: 'brightness_up' }],
-					sequence: [{ service: 'light.turn_on', target: { entity_id: dashboardEntity.entity_id }, data: { brightness_step_pct: stepPercent } }],
+					conditions: [{ condition: 'trigger', id: 'device_on' }],
+					sequence: [{ service: 'homeassistant.turn_on', target: { entity_id: dashboardEntity.toggle_entity } }],
 				},
 				{
-					conditions: [{ condition: 'trigger', id: 'brightness_down' }],
-					sequence: [{ service: 'light.turn_on', target: { entity_id: dashboardEntity.entity_id }, data: { brightness_step_pct: -stepPercent } }],
+					conditions: [{ condition: 'trigger', id: 'device_off' }],
+					sequence: [{ service: 'homeassistant.turn_off', target: { entity_id: dashboardEntity.toggle_entity } }],
 				},
 			)
+
+			// Step dimming actions (hold mode handled by separate automation)
+			if (hasDimmable && dimDevices.length > 0 && dimStyle === 'step') {
+				choices.push(
+					{
+						conditions: [{ condition: 'trigger', id: 'brightness_up' }],
+						sequence: [{ service: 'light.turn_on', target: { entity_id: dashboardEntity.entity_id }, data: { brightness_step_pct: stepPercent } }],
+					},
+					{
+						conditions: [{ condition: 'trigger', id: 'brightness_down' }],
+						sequence: [{ service: 'light.turn_on', target: { entity_id: dashboardEntity.entity_id }, data: { brightness_step_pct: -stepPercent } }],
+					},
+				)
+			}
+		}
+
+		// Only add sync automation if it has triggers
+		if (triggers.length > 0) {
+			automations.push({
+				id: `sync_${fixtureId}`,
+				alias: `Sync ${fixture.name}`,
+				trigger: triggers,
+				action: [{ choose: choices }],
+			})
+		}
+
+		// Generate separate hold dimming automation if needed
+		if (hasDimmable && dimDevices.length > 0 && dimStyle === 'hold') {
+			const holdAutomation = generateHoldDimAutomation(fixtureId, fixture, dimDevices, dashboardEntity)
+			if (holdAutomation) automations.push(holdAutomation)
 		}
 	}
 
-	const automations = [{
-		id: `sync_${fixtureId}`,
-		alias: `Sync ${fixture.name}`,
-		trigger: triggers,
-		action: [{ choose: choices }],
-	}]
-
-	// Generate separate hold dimming automation if needed
-	if (hasDevices && hasDimmable && dimStyle === 'hold') {
-		const holdAutomation = generateHoldDimAutomation(fixtureId, fixture, deviceEntities, dashboardEntity)
-		if (holdAutomation) automations.push(holdAutomation)
-	}
-
-	return automations
+	return automations.length > 0 ? automations : null
 }
 
 /**
@@ -324,15 +398,15 @@ export function generateSyncAutomation(fixtureId, fixture) {
  * Separate automation with mode: restart so brightness_stop can interrupt
  * @param {string} fixtureId
  * @param {import('../types/config.d.ts').SyncedFixture} fixture
- * @param {import('../types/config.d.ts').SyncedDevice[]} deviceEntities
+ * @param {import('../types/config.d.ts').SyncedDevice[]} dimDevices - Devices with dim config
  * @param {{ entity_id: string, toggle_entity: string, dimmable: boolean }} dashboardEntity
  * @returns {object}
  */
-function generateHoldDimAutomation(fixtureId, fixture, deviceEntities, dashboardEntity) {
-	const stepPercent = deviceEntities[0]?.dim?.step_percent || 5
+function generateHoldDimAutomation(fixtureId, fixture, dimDevices, dashboardEntity) {
+	const stepPercent = dimDevices[0]?.dim?.step_percent || 5
 	const triggers = []
 
-	for (const device of deviceEntities) {
+	for (const device of dimDevices) {
 		triggers.push(
 			{ domain: 'mqtt', device_id: device.device_id, type: 'action', subtype: 'brightness_move_up', trigger: 'device', id: 'brightness_up' },
 			{ domain: 'mqtt', device_id: device.device_id, type: 'action', subtype: 'brightness_move_down', trigger: 'device', id: 'brightness_down' },

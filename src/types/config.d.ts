@@ -12,7 +12,7 @@ export type LightControl = 'on' | 'off' | 'brightness' | 'color_temp' | 'rgb' | 
 /** Shorthand strings for common control sets */
 export type ControlsShorthand = 'toggle' | 'dimmable' | 'tunable' | 'rgb'
 
-/** Dimming behavior configuration */
+/** Dimming behavior configuration (for generator-built automations) */
 export interface DimConfig {
 	/** Dimming style: 'step' for discrete steps, 'hold' for continuous while holding */
 	style: 'step' | 'hold'
@@ -22,6 +22,15 @@ export interface DimConfig {
 
 	/** Transition duration in seconds for hold dimming (default: 4) */
 	transition?: number
+}
+
+/** Blueprint configuration for device control */
+export interface BlueprintConfig {
+	/** Path to blueprint file (relative to blueprints/automation/) */
+	path: string
+
+	/** Blueprint input values - passed directly to use_blueprint.input */
+	input: Record<string, unknown>
 }
 
 /** Element identified by entity_id (lights, switches, or remotes exposed as entities) */
@@ -40,8 +49,8 @@ export interface SyncedEntity {
 	controls?: LightControl[] | ControlsShorthand
 }
 
-/** Element identified by device_id (remotes/buttons via device triggers) */
-export interface SyncedDevice {
+/** Base properties for device-identified elements */
+interface SyncedDeviceBase {
 	/** Device ID for elements that use device triggers (e.g., IKEA remotes via Z2M) */
 	device_id: string
 
@@ -54,10 +63,17 @@ export interface SyncedDevice {
 	 * @default ['on', 'off']
 	 */
 	controls?: LightControl[] | ControlsShorthand
-
-	/** Dimming behavior configuration */
-	dim?: DimConfig
 }
+
+/**
+ * Element identified by device_id (remotes/buttons via device triggers).
+ * Specify either `dim` OR `blueprint`, not both. Omit both for on/off only.
+ */
+export type SyncedDevice = SyncedDeviceBase & (
+	| { dim: DimConfig; blueprint?: never }
+	| { dim?: never; blueprint: BlueprintConfig }
+	| { dim?: never; blueprint?: never }
+)
 
 /** Element within a synced fixture - identified by entity_id or device_id */
 export type SyncedFixtureElement = SyncedEntity | SyncedDevice
