@@ -13,30 +13,71 @@ export type LightControl = 'on' | 'off' | 'brightness' | 'color_temp' | 'rgb' | 
 /** Shorthand strings for common control sets */
 export type ControlsShorthand = 'toggle' | 'dimmable' | 'tunable' | 'rgb'
 
-/** Remote dimming configuration */
+/** Dimming behavior configuration (for generator-built automations) */
 export interface DimConfig {
-  targets: EntityId[]
-  style: 'hold' | 'step'
-  step_percent: number
+  /** Dimming style: 'step' for discrete steps, 'hold' for continuous while holding */
+  style: 'step' | 'hold'
+
+  /** Step percentage for step dimming (default: 10) */
+  step_percent?: number
+
+  /** Transition duration in seconds for hold dimming (default: 4) */
+  transition?: number
 }
 
-/** Entity within a synced fixture */
-export interface SyncedEntity {
-  /** Entity ID */
-  entity_id: EntityId
+/** Blueprint configuration for device control */
+export interface BlueprintConfig {
+  /** Path to blueprint file (relative to blueprints/automation/) */
+  path: string
 
-  /** Whether this entity participates in bidirectional sync */
+  /** Blueprint input values - passed directly to use_blueprint.input */
+  input: Record<string, unknown>
+}
+
+/** Element identified by entity_id (lights, switches, or remotes exposed as entities) */
+export interface SyncedEntity {
+  /** Entity ID (e.g., 'light.mb_soc_bulb') */
+  entity_id: string
+
+  /** Whether this element participates in bidirectional state sync */
   sync: boolean
 
   /**
-   * Control capabilities for this entity.
+   * Control capabilities for this element.
+   * Determines what template actions are generated.
    * @default ['on', 'off']
    */
   controls?: LightControl[] | ControlsShorthand
-
-  /** Remote dimming configuration (for remotes/buttons) */
-  dim?: DimConfig
 }
+
+/** Base properties for device-identified elements */
+interface SyncedDeviceBase {
+  /** Device ID for elements that use device triggers (e.g., IKEA remotes via Z2M) */
+  device_id: string
+
+  /** Whether this element participates in bidirectional state sync */
+  sync: boolean
+
+  /**
+   * Control capabilities for this element.
+   * Determines what template actions are generated.
+   * @default ['on', 'off']
+   */
+  controls?: LightControl[] | ControlsShorthand
+}
+
+/**
+ * Element identified by device_id (remotes/buttons via device triggers).
+ * Specify either `dim` OR `blueprint`, not both. Omit both for on/off only.
+ */
+export type SyncedDevice = SyncedDeviceBase & (
+  | { dim: DimConfig; blueprint?: never }
+  | { dim?: never; blueprint: BlueprintConfig }
+  | { dim?: never; blueprint?: never }
+)
+
+/** Element within a synced fixture - identified by entity_id or device_id */
+export type SyncedFixtureElement = SyncedEntity | SyncedDevice
 
 /** A fixture grouping multiple entities that should sync together */
 export interface SyncedFixture {
@@ -51,8 +92,8 @@ export interface SyncedFixture {
    */
   power: EntityId | null
 
-  /** Entities in this fixture */
-  entities: SyncedEntity[]
+  /** Elements in this fixture (entities and/or devices) */
+  entities: SyncedFixtureElement[]
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -124,6 +165,27 @@ export interface DashboardAreaConfig {
 
 /** Available dashboard templates */
 export type DashboardTemplate = 'bubble' | 'mushroom'
+
+/** Global/shared dashboard configuration (imported by dashboard-specific configs) */
+export interface GlobalDashboardConfig {
+  /** Schema version - do not change manually */
+  schemaVersion: number
+
+  /** Language code for translations (from i18n/*.csv) */
+  language?: string
+
+  /** Areas to pin at the top of the dashboard (in order) */
+  pinned_areas?: AreaId[]
+
+  /** Areas to exclude from the dashboard */
+  excluded_areas?: AreaId[]
+
+  /** Scene suffix for default tap action */
+  default_scene_suffix?: string
+
+  /** Per-area dashboard configuration */
+  areas?: Partial<Record<AreaId, DashboardAreaConfig>>
+}
 
 export interface DashboardConfig {
   /** Schema version - do not change manually */

@@ -103,6 +103,16 @@ describe('dashboard/data.js', () => {
 			expect(otherIds).toContain('light.lr_outdoor')
 		})
 
+		test('excluded light in otherEntities has dimming properties', () => {
+			const result = prepareAllAreaData(minimalInventory, dashboardConfig, generatorConfig)
+			const lr = result.find(r => r.area.id === 'living_room')
+			const excludedLight = lr.otherEntities.find(e => e.entity_id === 'light.lr_outdoor')
+
+			expect(excludedLight.dimmable).toBeDefined()
+			expect(excludedLight.brightness_entity).toBe('light.lr_outdoor')
+			expect(excludedLight.toggle_entity).toBe('light.lr_outdoor')
+		})
+
 		test('synced entities are excluded from normal lights list', () => {
 			const result = prepareAllAreaData(minimalInventory, dashboardConfig, generatorConfig)
 			const bedroom = result.find(r => r.area.id === 'bedroom')
@@ -112,6 +122,24 @@ describe('dashboard/data.js', () => {
 			expect(lightIds).not.toContain('switch.mb_soc')
 			// But the synced fixture dashboard entity should appear
 			expect(lightIds).toContain('light.mb_soc_bulb')
+		})
+
+		test('synced fixture excluded when its dashboard entity is in excluded_lights', () => {
+			const configWithExcludedFixture = {
+				...dashboardConfig,
+				areas: {
+					...dashboardConfig.areas,
+					bedroom: {
+						...dashboardConfig.areas.bedroom,
+						excluded_lights: ['light.mb_soc_bulb'],
+					},
+				},
+			}
+			const result = prepareAllAreaData(minimalInventory, configWithExcludedFixture, generatorConfig)
+			const bedroom = result.find(r => r.area.id === 'bedroom')
+			const lightIds = bedroom.lights.map(l => l.entity_id)
+
+			expect(lightIds).not.toContain('light.mb_soc_bulb')
 		})
 
 		test('synced fixture appears in lights with correct toggle entity', () => {
