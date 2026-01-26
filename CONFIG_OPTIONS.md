@@ -103,29 +103,46 @@ syncedEntities: {
   fixture_id: {
     name: 'Fixture Display Name',
     power: 'light.power_entity',  // or null if always powered
+    default_brightness: 254,       // Optional: hardware power-on default (default: 255)
     entities: [
       { entity_id: 'light.relay', sync: true },
       { entity_id: 'light.bulb', sync: true, controls: 'dimmable' },
+      {
+        device_id: 'remote-device-id',
+        name: 'remote_name',  // Used in automation naming
+        sync: false,
+        blueprint: ikeaE2201Base('light.fixture_id'),
+      },
     ],
   },
 }
 ```
 
-**Properties:**
+**Fixture Properties:**
 
-| Property | Type | Description |
-|----------|------|-------------|
-| `name` | `string` | Display name for the fixture |
-| `power` | `string \| null` | Power control entity. `null` = always on, entity_id = generates template light with boot-wait |
-| `entities` | `SyncedEntity[]` | Entities in this fixture |
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `name` | `string` | required | Display name for the fixture |
+| `power` | `string \| null` | required | Power control entity. `null` = always on, entity_id = generates template light with boot-wait |
+| `default_brightness` | `number` | `254` | Hardware power-on brightness. Used for input_number initial value and turn_on reset. |
+| `entities` | `SyncedEntity[]` | required | Entities in this fixture |
 
 **Entity Properties:**
 
 | Property | Type | Description |
 |----------|------|-------------|
-| `entity_id` | `string` | Entity ID |
+| `entity_id` | `string` | Entity ID (for sync entities) |
 | `sync` | `boolean` | Whether entity participates in bidirectional sync |
 | `controls` | `string \| string[]` | Control capabilities. Default: `['on', 'off']` |
+
+**Device Properties (for remotes):**
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `device_id` | `string` | Z2M device ID |
+| `name` | `string` | Name used in automation ID and alias (e.g., `shahar` → `fixture_remote_shahar`) |
+| `sync` | `boolean` | Always `false` for devices |
+| `blueprint` | `object` | Blueprint configuration |
 
 **Controls Shorthand:**
 
@@ -136,15 +153,44 @@ syncedEntities: {
 | `'tunable'` | `['on', 'off', 'brightness', 'color_temp']` |
 | `'rgb'` | `['on', 'off', 'brightness', 'rgb']` |
 
+**Naming Convention:**
+
+All generated components follow a consistent naming pattern:
+
+| Component | ID/Name |
+|-----------|---------|
+| Template light | `{fixture_id}` |
+| Sync automation | `{fixture_id}_sync` |
+| Blueprint automation | `{fixture_id}_remote_{name}` |
+| Event throttler script | `{fixture_id}_ev_throttler` |
+| Brightness helper | `{fixture_id}_brightness` |
+
+**Labels:**
+
+All generated automations and scripts receive two labels:
+- `auto_generated` - Identifies generator-created entities
+- `fixture_{fixture_id}` - Groups all components of a fixture
+
 **What Gets Generated:**
 
 | `power` | dimmables | Generated |
 |---------|-----------|-----------|
-| entity_id | any | Template light with boot-wait + sync automation |
+| entity_id | any | Template light + input_number helper + event throttler script + sync automation |
 | null | 1 | Sync automation only (bulb used directly) |
 | null | 2+ | Light group + sync automation |
 
-> **Note:** Configure Z2M power-on brightness to prevent bulbs turning on dimly when wall switch is toggled.
+**When `power` is set with dimmable entities, the generator creates:**
+
+1. **`input_number.{fixture_id}_brightness`** - Tracks brightness internally to avoid stale values from Zigbee bulbs after power cycles. Initial value: `default_brightness` (default: 254).
+
+2. **`script.{fixture_id}_ev_throttler`** - Event throttler with `mode: single`. Rejects concurrent calls to prevent command flooding when rapidly dimming. Sequence:
+   - Wait for bulbs to become available (5s timeout)
+   - Send brightness to bulbs
+   - Update the input_number helper
+
+3. **Template light** - Uses the helper for `level_template` (not the bulb's potentially stale brightness). The `turn_on` action resets the helper to `default_brightness`. The `set_level` action routes through the event throttler script.
+
+> **Note:** Configure Z2M power-on brightness to match your `default_brightness` value for consistent behavior.
 
 ### YAML Usage Examples
 

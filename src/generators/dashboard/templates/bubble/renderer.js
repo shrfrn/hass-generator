@@ -294,15 +294,35 @@ function buildClimateCard(acEntity, fanEntity, t) {
 }
 
 function buildOtherGrid(entities, t) {
-	const cards = entities.map(entity => ({
-		type: 'custom:bubble-card',
-		card_type: 'button',
-		button_type: 'switch',
-		entity: entity.entity_id,
-		name: t.entity(entity.entity_id, entity.name),
-		scrolling_effect: true,
-		tap_action: { action: 'toggle' },
-	}))
+	const cards = entities.map(entity => {
+		// Excluded lights have dimmable info - render with slider if dimmable
+		if (entity.dimmable !== undefined) {
+			return {
+				type: 'custom:bubble-card',
+				card_type: 'button',
+				button_type: entity.dimmable ? 'slider' : 'switch',
+				entity: entity.brightness_entity,
+				name: t.entity(entity.entity_id, entity.name),
+				scrolling_effect: true,
+				tap_action: {
+					action: 'call-service',
+					service: 'homeassistant.toggle',
+					target: { entity_id: entity.toggle_entity },
+				},
+			}
+		}
+
+		// Non-light entities - simple toggle
+		return {
+			type: 'custom:bubble-card',
+			card_type: 'button',
+			button_type: 'switch',
+			entity: entity.entity_id,
+			name: t.entity(entity.entity_id, entity.name),
+			scrolling_effect: true,
+			tap_action: { action: 'toggle' },
+		}
+	})
 
 	return {
 		type: 'grid',

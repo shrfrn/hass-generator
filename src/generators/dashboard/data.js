@@ -224,6 +224,9 @@ function buildLightsList(entities, excludedLights, includedLights, dimmableCompa
 	for (const [fixtureId, fixture] of Object.entries(syncedEntities)) {
 		const dashboardInfo = getDashboardEntity(fixtureId, fixture)
 
+		// Skip if fixture's dashboard entity is excluded
+		if (excludedLights.has(dashboardInfo.entity_id)) continue
+
 		// Determine if fixture has advanced controls (color_temp, rgb, etc.)
 		const dimmables = fixture.entities.filter(e => {
 			const controls = resolveControls(e.controls)
@@ -310,17 +313,19 @@ function buildOtherList(entities, lightsInSection, acEntity, fanEntity, configCt
 		'siren', 'time', 'date', 'datetime',
 	]
 
-	return entities.filter(e => {
-		if (excludedLights.has(e.entity_id)) return true
-		if (lightIds.has(e.entity_id)) return false
-		if (companionBulbs.has(e.entity_id)) return false
-		if (actuatorsWithCompanions.has(e.entity_id)) return false
-		if (syncedEntityIds.has(e.entity_id)) return false
-		if (e.entity_id === acEntity || e.entity_id === fanEntity) return false
-		if (excludeDomains.includes(e.domain)) return false
+	return entities
+		.filter(e => {
+			if (excludedLights.has(e.entity_id)) return true
+			if (lightIds.has(e.entity_id)) return false
+			if (companionBulbs.has(e.entity_id)) return false
+			if (actuatorsWithCompanions.has(e.entity_id)) return false
+			if (syncedEntityIds.has(e.entity_id)) return false
+			if (e.entity_id === acEntity || e.entity_id === fanEntity) return false
+			if (excludeDomains.includes(e.domain)) return false
 
-		return true
-	})
+			return true
+		})
+		.map(e => excludedLights.has(e.entity_id) ? enrichWithDimming(e, dimmableCompanions) : e)
 }
 
 /**

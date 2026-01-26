@@ -64,8 +64,14 @@ function buildVacancyTimer(area, areaConfig, globalConfig) {
 function buildSyncedEntitiesSection(syncedEntities) {
 	if (!syncedEntities) return {}
 
-	const { templateLights, lightGroups, automations } = processSyncedEntities(syncedEntities)
+	const { templateLights, lightGroups, automations, inputNumbers, scripts } = processSyncedEntities(syncedEntities)
 	const result = {}
+
+	// Input numbers for brightness tracking (avoids stale Zigbee values)
+	if (Object.keys(inputNumbers).length > 0) result.input_number = inputNumbers
+
+	// Scripts for flood protection (mode: single)
+	if (Object.keys(scripts).length > 0) result.script = scripts
 
 	// Template lights use legacy platform format - combine with light groups under 'light:'
 	const allLights = [...templateLights, ...lightGroups]
