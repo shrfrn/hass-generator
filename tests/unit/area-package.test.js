@@ -185,12 +185,12 @@ describe('area-package.js', () => {
 			expect(groupSection).toContain('light.mb_ceiling')
 		})
 
-		test('syncedEntities generates sync automation', async () => {
+		test('syncedEntities generates sync automation with correct naming', async () => {
 			await generateAreaPackages(minimalInventory, generatorConfig, TEST_DIR)
 
 			const content = readFileSync(join(TEST_DIR, 'areas/mb_bedroom.yaml'), 'utf8')
 			expect(content).toContain('automation:')
-			expect(content).toContain('sync_mb_standing_lamp')
+			expect(content).toContain('mb_standing_lamp_sync')
 			expect(content).toContain('switch.mb_soc')
 			expect(content).toContain('light.mb_soc_bulb')
 		})
@@ -217,7 +217,137 @@ describe('area-package.js', () => {
 			const content = readFileSync(join(TEST_DIR, 'areas/mb_bedroom.yaml'), 'utf8')
 			expect(content).toContain('platform: template')
 			expect(content).toContain('friendly_name: Bedroom Wall Light')
+		})
+
+		test('syncedEntities with power + dimmable generates input_number helper', async () => {
+			const config = {
+				areas: {
+					bedroom: {
+						syncedEntities: {
+							mb_wall_light: {
+								name: 'Bedroom Wall Light',
+								power: 'light.mb_relay',
+								entities: [
+									{ entity_id: 'light.mb_relay', sync: true },
+									{ entity_id: 'light.mb_bulb', sync: true, controls: 'dimmable' },
+								],
+							},
+						},
+					},
+				},
+			}
+			await generateAreaPackages(minimalInventory, config, TEST_DIR)
+
+			const content = readFileSync(join(TEST_DIR, 'areas/mb_bedroom.yaml'), 'utf8')
+			expect(content).toContain('input_number:')
+			expect(content).toContain('mb_wall_light_brightness:')
+			expect(content).toContain('initial: 254') // Default when no default_brightness specified
+		})
+
+		test('syncedEntities with power + dimmable generates event throttler script', async () => {
+			const config = {
+				areas: {
+					bedroom: {
+						syncedEntities: {
+							mb_wall_light: {
+								name: 'Bedroom Wall Light',
+								power: 'light.mb_relay',
+								entities: [
+									{ entity_id: 'light.mb_relay', sync: true },
+									{ entity_id: 'light.mb_bulb', sync: true, controls: 'dimmable' },
+								],
+							},
+						},
+					},
+				},
+			}
+			await generateAreaPackages(minimalInventory, config, TEST_DIR)
+
+			const content = readFileSync(join(TEST_DIR, 'areas/mb_bedroom.yaml'), 'utf8')
+			expect(content).toContain('script:')
+			expect(content).toContain('mb_wall_light_ev_throttler:')
+			expect(content).toContain('mode: single')
 			expect(content).toContain('wait_template')
+		})
+
+		test('syncedEntities template light uses helper for level_template', async () => {
+			const config = {
+				areas: {
+					bedroom: {
+						syncedEntities: {
+							mb_wall_light: {
+								name: 'Bedroom Wall Light',
+								power: 'light.mb_relay',
+								entities: [
+									{ entity_id: 'light.mb_relay', sync: true },
+									{ entity_id: 'light.mb_bulb', sync: true, controls: 'dimmable' },
+								],
+							},
+						},
+					},
+				},
+			}
+			await generateAreaPackages(minimalInventory, config, TEST_DIR)
+
+			const content = readFileSync(join(TEST_DIR, 'areas/mb_bedroom.yaml'), 'utf8')
+			// level_template should read from input_number helper, not bulb's brightness
+			expect(content).toContain("input_number.mb_wall_light_brightness")
+			expect(content).toContain("level_template:")
+		})
+
+		test('syncedEntities blueprint automation uses device name property', async () => {
+			const config = {
+				areas: {
+					bedroom: {
+						syncedEntities: {
+							mb_wall_light: {
+								name: 'Bedroom Wall Light',
+								power: 'light.mb_relay',
+								entities: [
+									{ entity_id: 'light.mb_relay', sync: true },
+									{ entity_id: 'light.mb_bulb', sync: true, controls: 'dimmable' },
+									{
+										device_id: 'test-device-123',
+										name: 'sharon',
+										sync: false,
+										blueprint: { path: 'test/blueprint.yaml', input: { light_entity: 'light.mb_wall_light' } },
+									},
+								],
+							},
+						},
+					},
+				},
+			}
+			await generateAreaPackages(minimalInventory, config, TEST_DIR)
+
+			const content = readFileSync(join(TEST_DIR, 'areas/mb_bedroom.yaml'), 'utf8')
+			expect(content).toContain('mb_wall_light_remote_sharon')
+			expect(content).toContain('Bedroom Wall Light sharon')
+		})
+
+		test('syncedEntities default_brightness overrides default', async () => {
+			const config = {
+				areas: {
+					bedroom: {
+						syncedEntities: {
+							mb_wall_light: {
+								name: 'Bedroom Wall Light',
+								power: 'light.mb_relay',
+								default_brightness: 200,
+								entities: [
+									{ entity_id: 'light.mb_relay', sync: true },
+									{ entity_id: 'light.mb_bulb', sync: true, controls: 'dimmable' },
+								],
+							},
+						},
+					},
+				},
+			}
+			await generateAreaPackages(minimalInventory, config, TEST_DIR)
+
+			const content = readFileSync(join(TEST_DIR, 'areas/mb_bedroom.yaml'), 'utf8')
+			expect(content).toContain('initial: 200')
+			expect(content).toContain('value: 200')
 		})
 	})
 

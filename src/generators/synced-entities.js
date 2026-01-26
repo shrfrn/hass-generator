@@ -1,6 +1,9 @@
 // @ts-check
 // Helper functions for generating synced entities (templates, groups, automations)
 
+// Note: Labels cannot be added to automations/scripts in YAML packages.
+// Labels are a UI-only feature in Home Assistant.
+
 /**
  * Resolve controls shorthand to array
  * @param {string | string[] | undefined} controls
@@ -155,6 +158,77 @@ function buildWaitTemplate(entityIds) {
 }
 
 /**
+ * Generate input_number helper for brightness tracking
+ * Used to avoid stale brightness values from Zigbee bulbs after power cycles
+ * @param {string} fixtureId
+ * @param {import('../types/config.d.ts').SyncedFixture} fixture
+ * @returns {object | null}
+ */
+export function generateBrightnessHelper(fixtureId, fixture) {
+	if (!fixture.power) return null
+
+	const dimmables = getDimmableEntities(fixture)
+	if (dimmables.length === 0) return null
+
+	const defaultBrightness = fixture.default_brightness ?? 254
+
+	return {
+		[`${fixtureId}_brightness`]: {
+			name: `${fixture.name} Brightness`,
+			min: 0,
+			max: 255,
+			step: 1,
+			initial: defaultBrightness,
+			mode: 'slider',
+		},
+	}
+}
+
+/**
+ * Generate event throttler script for brightness control with flood protection
+ * Uses mode: single to prevent concurrent calls from queuing
+ * @param {string} fixtureId
+ * @param {import('../types/config.d.ts').SyncedFixture} fixture
+ * @returns {object | null}
+ */
+export function generateEventThrottlerScript(fixtureId, fixture) {
+	if (!fixture.power) return null
+
+	const dimmables = getDimmableEntities(fixture)
+	if (dimmables.length === 0) return null
+
+	const dimmableIds = dimmables.map(e => e.entity_id)
+	const targetEntity = dimmableIds.length === 1 ? dimmableIds[0] : dimmableIds
+
+	return {
+		[`${fixtureId}_ev_throttler`]: {
+			alias: `${fixture.name} Event Throttler`,
+			mode: 'single',
+			fields: {
+				brightness: { description: 'Brightness level (0-255)' },
+			},
+			sequence: [
+				{
+					wait_template: buildWaitTemplate(dimmableIds),
+					timeout: '00:00:05',
+					continue_on_timeout: false,
+				},
+				{
+					service: 'light.turn_on',
+					target: { entity_id: targetEntity },
+					data: { brightness: '{{ brightness }}' },
+				},
+				{
+					service: 'input_number.set_value',
+					target: { entity_id: `input_number.${fixtureId}_brightness` },
+					data: { value: '{{ brightness }}' },
+				},
+			],
+		},
+	}
+}
+
+/**
  * Generate a template light for a fixture with power control
  * Uses legacy light.template platform format (works in packages)
  * @param {string} fixtureId
@@ -167,28 +241,52 @@ export function generateTemplateLight(fixtureId, fixture) {
 	const dimmables = getDimmableEntities(fixture)
 	const dimmableIds = dimmables.map(e => e.entity_id)
 	const primaryDimmable = dimmables[0]
+	const defaultBrightness = fixture.default_brightness ?? 254
 
 	// Get controls from primary dimmable to determine template capabilities
 	const controls = primaryDimmable ? resolveControls(primaryDimmable.controls) : ['on', 'off']
+	const hasBrightness = controls.includes('brightness') && primaryDimmable
 
 	// Legacy format: light.template platform (entity ID comes from the key name)
 	const templateLight = {
 		friendly_name: fixture.name,
 		value_template: `{{ is_state('${fixture.power}', 'on') }}`,
-		turn_on: { service: 'light.turn_on', target: { entity_id: fixture.power } },
 		turn_off: { service: 'light.turn_off', target: { entity_id: fixture.power } },
 	}
 
-	// Add level_template and set_level action if dimmable
-	if (controls.includes('brightness') && primaryDimmable) {
-		templateLight.level_template = `{{ state_attr('${primaryDimmable.entity_id}', 'brightness') | default(0) }}`
-		templateLight.set_level = [
+	// Build turn_on action - reset brightness helper if dimmable
+	if (hasBrightness) {
+		templateLight.turn_on = [
 			{ service: 'light.turn_on', target: { entity_id: fixture.power } },
-			{ wait_template: buildWaitTemplate(dimmableIds), timeout: '00:00:05' },
 			{
-				service: 'light.turn_on',
-				target: { entity_id: dimmableIds.length === 1 ? dimmableIds[0] : dimmableIds },
-				data: { brightness: '{{ brightness }}' },
+				service: 'input_number.set_value',
+				target: { entity_id: `input_number.${fixtureId}_brightness` },
+				data: { value: defaultBrightness },
+			},
+		]
+	} else {
+		templateLight.turn_on = { service: 'light.turn_on', target: { entity_id: fixture.power } }
+	}
+
+	// Add level_template and set_level action if dimmable
+	// Uses input_number helper to avoid stale brightness from bulb after power cycles
+	if (hasBrightness) {
+		templateLight.level_template = `{{ states('input_number.${fixtureId}_brightness') | int }}`
+		templateLight.set_level = [
+			{
+				choose: [
+					{
+						conditions: [
+							{ condition: 'template', value_template: '{{ brightness | int > 0 }}' },
+						],
+						sequence: [
+							{
+								service: `script.${fixtureId}_ev_throttler`,
+								data: { brightness: '{{ brightness }}' },
+							},
+						],
+					},
+				],
 			},
 		]
 	}
@@ -245,11 +343,15 @@ export function generateLightGroup(fixtureId, fixture) {
  */
 function generateBlueprintAutomation(fixtureId, fixture, device, deviceIndex) {
 	const blueprint = /** @type {import('../types/config.d.ts').BlueprintConfig} */ (device.blueprint)
-	const suffix = deviceIndex > 0 ? `_${deviceIndex}` : ''
+
+	// Use device name if provided, otherwise fall back to index
+	const hasName = 'name' in device && device.name
+	const suffix = hasName ? `_${device.name}` : (deviceIndex > 0 ? `_${deviceIndex}` : '')
+	const aliasName = hasName ? device.name : (deviceIndex > 0 ? `Remote ${deviceIndex + 1}` : 'Remote')
 
 	return {
-		id: `blueprint_${fixtureId}${suffix}`,
-		alias: `${fixture.name} Remote${suffix ? ` ${deviceIndex + 1}` : ''}`,
+		id: `${fixtureId}_remote${suffix}`,
+		alias: `${fixture.name} ${aliasName}`,
 		use_blueprint: {
 			path: blueprint.path,
 			input: {
@@ -376,8 +478,8 @@ export function generateSyncAutomation(fixtureId, fixture) {
 		// Only add sync automation if it has triggers
 		if (triggers.length > 0) {
 			automations.push({
-				id: `sync_${fixtureId}`,
-				alias: `Sync ${fixture.name}`,
+				id: `${fixtureId}_sync`,
+				alias: `${fixture.name} Sync`,
 				trigger: triggers,
 				action: [{ choose: choices }],
 			})
@@ -415,8 +517,8 @@ function generateHoldDimAutomation(fixtureId, fixture, dimDevices, dashboardEnti
 	}
 
 	return {
-		id: `dim_${fixtureId}`,
-		alias: `Dim ${fixture.name}`,
+		id: `${fixtureId}_dim`,
+		alias: `${fixture.name} Dim`,
 		mode: 'restart',
 		trigger: triggers,
 		action: [{
@@ -457,14 +559,24 @@ function generateHoldDimAutomation(fixtureId, fixture, dimDevices, dashboardEnti
 /**
  * Process all synced entities for an area and return YAML structures
  * @param {Record<string, import('../types/config.d.ts').SyncedFixture>} syncedEntities
- * @returns {{ templateLights: object[], lightGroups: object[], automations: object[] }}
+ * @returns {{ templateLights: object[], lightGroups: object[], automations: object[], inputNumbers: object, scripts: object }}
  */
 export function processSyncedEntities(syncedEntities) {
 	const templateLights = []
 	const lightGroups = []
 	const automations = []
+	let inputNumbers = {}
+	let scripts = {}
 
 	for (const [fixtureId, fixture] of Object.entries(syncedEntities)) {
+		// Generate brightness helper (if power entity + dimmable)
+		const brightnessHelper = generateBrightnessHelper(fixtureId, fixture)
+		if (brightnessHelper) inputNumbers = { ...inputNumbers, ...brightnessHelper }
+
+		// Generate event throttler script (if power entity + dimmable)
+		const throttlerScript = generateEventThrottlerScript(fixtureId, fixture)
+		if (throttlerScript) scripts = { ...scripts, ...throttlerScript }
+
 		// Generate template light (if power entity set) - legacy platform format
 		const templateLight = generateTemplateLight(fixtureId, fixture)
 		if (templateLight) templateLights.push(templateLight)
@@ -478,7 +590,7 @@ export function processSyncedEntities(syncedEntities) {
 		if (fixtureAutomations) automations.push(...fixtureAutomations)
 	}
 
-	return { templateLights, lightGroups, automations }
+	return { templateLights, lightGroups, automations, inputNumbers, scripts }
 }
 
 /**

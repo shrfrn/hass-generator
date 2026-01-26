@@ -58,6 +58,13 @@ interface SyncedDeviceBase {
 	sync: boolean
 
 	/**
+	 * Optional name for this device, used in automation naming.
+	 * For blueprint devices, this becomes part of the automation ID and alias.
+	 * @example 'shahar' -> automation ID: 'fixture_remote_shahar'
+	 */
+	name?: string
+
+	/**
 	 * Control capabilities for this element.
 	 * Determines what template actions are generated.
 	 * @default ['on', 'off']
@@ -90,6 +97,14 @@ export interface SyncedFixture {
 	 * - If null + single dimmable: uses the bulb directly
 	 */
 	power: string | null
+
+	/**
+	 * Hardware power-on brightness level (0-255).
+	 * Used as initial value for brightness helper and turn_on reset.
+	 * Should match the bulb's configured power-on behavior.
+	 * @default 254
+	 */
+	default_brightness?: number
 
 	/** Elements in this fixture (entities and/or devices) */
 	entities: SyncedFixtureElement[]
