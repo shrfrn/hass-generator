@@ -1,0 +1,13 @@
+{
+	"folders": [
+		{
+			"name": "hass-generator",
+			"path": "."
+		},
+		{
+			"name": "hass-config",
+			"path": "../hass-config"
+		}
+	],
+    "settings": {}
+}
