@@ -3,7 +3,7 @@ import { join } from 'path'
 import { writeYamlFile, generateHeader } from './yaml-utils.js'
 import { extractPrefix } from '../utils/entity.js'
 import { sanitizeFileName } from '../utils/strings.js'
-import { processSyncedEntities, getSyncedEntityIds, getGeneratedGroupEntityIds } from './synced-entities.js'
+import { processSyncedEntities, getSyncedEntityIds, getGeneratedGroupEntityIds, getWrapperEntityIds } from './synced-entities.js'
 
 export async function generateAreaPackages(inventory, config, packagesDir) {
 	const { areas, entities, scenes } = inventory
@@ -92,8 +92,9 @@ function buildLightGroup({ area, entities, areaConfig, globalConfig }) {
 	const dimmableCompanions = areaConfig.dimmable_companions || {}
 	const companionBulbs = new Set(Object.values(dimmableCompanions))
 
-	// Synced entities are controlled via generated templates/groups - exclude from group
+	// Synced entities: exclude raw bulbs and internal _group so area group lists template only
 	const syncedEntityIds = areaConfig.syncedEntities ? getSyncedEntityIds(areaConfig.syncedEntities) : new Set()
+	const generatedGroupIds = new Set(getGeneratedGroupEntityIds(areaConfig.syncedEntities))
 
 	// Determine which labels to exclude (area overrides global, no hardcoded defaults)
 	const globalExcludedLabels = globalConfig.excluded_labels || []
@@ -108,6 +109,7 @@ function buildLightGroup({ area, entities, areaConfig, globalConfig }) {
 		.filter(e => e.area_id === area.id && e.domain === 'light')
 		.filter(e => !companionBulbs.has(e.entity_id))
 		.filter(e => !syncedEntityIds.has(e.entity_id))
+		.filter(e => !generatedGroupIds.has(e.entity_id))
 		.filter(e => {
 			const entityLabels = e.labels || []
 
@@ -124,9 +126,9 @@ function buildLightGroup({ area, entities, areaConfig, globalConfig }) {
 		.map(e => e.entity_id)
 		.filter(id => !excludeSet.has(id))
 
-	// Include generated group entities (power null + 2+ dimmables) so area group lists the group, not only member bulbs
-	const generatedGroupIds = getGeneratedGroupEntityIds(areaConfig.syncedEntities)
-	const allLights = [...new Set([...areaLights, ...includes, ...generatedGroupIds])]
+	// Include template light (light.${fixtureId}) for each synced fixture so scenes/automations target one entity
+	const wrapperEntityIds = getWrapperEntityIds(areaConfig.syncedEntities)
+	const allLights = [...new Set([...areaLights, ...includes, ...wrapperEntityIds])]
 
 	if (allLights.length === 0) {
 		return { lightGroup: null, included: [], excluded: [] }

@@ -88,7 +88,8 @@ export function getOnOffDevices(devices) {
 }
 
 /**
- * Determine what dashboard entity to use for a fixture
+ * Determine what dashboard entity to use for a fixture.
+ * Always the template light light.${fixtureId} so scenes, automations, and UI target one entity.
  * @param {string} fixtureId
  * @param {import('../types/config.d.ts').SyncedFixture} fixture
  * @returns {{ entity_id: string, toggle_entity: string, dimmable: boolean }}
@@ -96,50 +97,10 @@ export function getOnOffDevices(devices) {
 export function getDashboardEntity(fixtureId, fixture) {
 	const dimmables = getDimmableEntities(fixture)
 
-	if (fixture.power) {
-		// Template light is dashboard entity
-		return {
-			entity_id: `light.${fixtureId}`,
-			toggle_entity: `light.${fixtureId}`,
-			dimmable: dimmables.length > 0,
-		}
-	}
-
-	if (dimmables.length === 1) {
-		// Single dimmable bulb is dashboard entity
-		const syncEntities = getSyncEntities(fixture)
-		const toggleEntity = syncEntities.find(e => !resolveControls(e.controls).includes('brightness'))
-
-		return {
-			entity_id: dimmables[0].entity_id,
-			toggle_entity: toggleEntity?.entity_id || dimmables[0].entity_id,
-			dimmable: true,
-		}
-	}
-
-	if (dimmables.length > 1) {
-		// Light group is dashboard entity
-		const syncEntities = getSyncEntities(fixture)
-		const toggleEntity = syncEntities.find(e => !resolveControls(e.controls).includes('brightness'))
-
-		return {
-			entity_id: `light.${fixtureId}_group`,
-			toggle_entity: toggleEntity?.entity_id || `light.${fixtureId}_group`,
-			dimmable: true,
-		}
-	}
-
-	// No dimmables - use first sync entity or first entity with entity_id
-	const syncEntities = getSyncEntities(fixture)
-	const firstEntityWithId = /** @type {import('../types/config.d.ts').SyncedEntity | undefined} */ (
-		fixture.entities.find(e => 'entity_id' in e)
-	)
-	const fallbackEntityId = syncEntities[0]?.entity_id || firstEntityWithId?.entity_id || `light.${fixtureId}`
-
 	return {
-		entity_id: fallbackEntityId,
-		toggle_entity: fallbackEntityId,
-		dimmable: false,
+		entity_id: `light.${fixtureId}`,
+		toggle_entity: `light.${fixtureId}`,
+		dimmable: dimmables.length > 0,
 	}
 }
 
@@ -229,83 +190,134 @@ export function generateEventThrottlerScript(fixtureId, fixture) {
 }
 
 /**
- * Generate a template light for a fixture with power control
+ * Get the underlying light entity id(s) for a fixture (bulb or group).
+ * Single bulb: entity_id; multiple: light.${fixtureId}_group.
+ * @param {string} fixtureId
+ * @param {import('../types/config.d.ts').SyncedFixture} fixture
+ * @returns {string | string[]}
+ */
+function getUnderlyingLightTarget(fixtureId, fixture) {
+	const dimmables = getDimmableEntities(fixture)
+	const dimmableIds = dimmables.map(e => e.entity_id)
+
+	if (dimmableIds.length === 1) return dimmableIds[0]
+	if (dimmableIds.length > 1) return `light.${fixtureId}_group`
+
+	// No dimmables - first entity with entity_id (no _group is generated in this case)
+	const first = /** @type {import('../types/config.d.ts').SyncedEntity | undefined} */ (
+		fixture.entities.find(e => 'entity_id' in e)
+	)
+	return first?.entity_id ?? `light.${fixtureId}`
+}
+
+/**
+ * Generate a template light for a fixture.
+ * With power: coordinates power + bulb/group. Without power: pass-through wrapper over bulb/group.
+ * Always creates light.${fixtureId} so scenes, automations, and UI have one target.
  * Uses legacy light.template platform format (works in packages)
  * @param {string} fixtureId
  * @param {import('../types/config.d.ts').SyncedFixture} fixture
  * @returns {object}
  */
 export function generateTemplateLight(fixtureId, fixture) {
-	if (!fixture.power) return null
-
 	const dimmables = getDimmableEntities(fixture)
 	const dimmableIds = dimmables.map(e => e.entity_id)
 	const primaryDimmable = dimmables[0]
 	const defaultBrightness = fixture.default_brightness ?? 254
-
-	// Get controls from primary dimmable to determine template capabilities
 	const controls = primaryDimmable ? resolveControls(primaryDimmable.controls) : ['on', 'off']
 	const hasBrightness = controls.includes('brightness') && primaryDimmable
 
-	// Legacy format: light.template platform (entity ID comes from the key name)
+	if (fixture.power) {
+		// Power-controlled: template coordinates power + bulb/group
+		const templateLight = {
+			friendly_name: fixture.name,
+			value_template: `{{ is_state('${fixture.power}', 'on') }}`,
+			turn_off: { service: 'light.turn_off', target: { entity_id: fixture.power } },
+		}
+
+		if (hasBrightness) {
+			templateLight.turn_on = [
+				{ service: 'light.turn_on', target: { entity_id: fixture.power } },
+				{
+					service: 'input_number.set_value',
+					target: { entity_id: `input_number.${fixtureId}_brightness` },
+					data: { value: defaultBrightness },
+				},
+			]
+		} else {
+			templateLight.turn_on = { service: 'light.turn_on', target: { entity_id: fixture.power } }
+		}
+
+		if (hasBrightness) {
+			templateLight.level_template = `{{ states('input_number.${fixtureId}_brightness') | int }}`
+			templateLight.set_level = [
+				{
+					choose: [
+						{
+							conditions: [
+								{ condition: 'template', value_template: '{{ brightness | int > 0 }}' },
+							],
+							sequence: [
+								{
+									service: `script.${fixtureId}_ev_throttler`,
+									data: { brightness: '{{ brightness }}' },
+								},
+							],
+						},
+					],
+				},
+			]
+		}
+
+		if (controls.includes('color_temp') && primaryDimmable) {
+			templateLight.temperature_template = `{{ state_attr('${primaryDimmable.entity_id}', 'color_temp') }}`
+			templateLight.set_temperature = [
+				{ service: 'light.turn_on', target: { entity_id: fixture.power } },
+				{ wait_template: buildWaitTemplate(dimmableIds), timeout: '00:00:05' },
+				{
+					service: 'light.turn_on',
+					target: { entity_id: dimmableIds.length === 1 ? dimmableIds[0] : dimmableIds },
+					data: { color_temp: '{{ color_temp }}' },
+				},
+			]
+		}
+
+		return {
+			platform: 'template',
+			lights: { [fixtureId]: templateLight },
+		}
+	}
+
+	// No power: wrapper template, pass-through to bulb/group
+	const underlying = getUnderlyingLightTarget(fixtureId, fixture)
+	const underlyingId = Array.isArray(underlying) ? underlying[0] : underlying
+	const target = Array.isArray(underlying) ? underlying : [underlying]
+
 	const templateLight = {
 		friendly_name: fixture.name,
-		value_template: `{{ is_state('${fixture.power}', 'on') }}`,
-		turn_off: { service: 'light.turn_off', target: { entity_id: fixture.power } },
+		value_template: `{{ is_state('${underlyingId}', 'on') }}`,
+		turn_on: { service: 'light.turn_on', target: { entity_id: target } },
+		turn_off: { service: 'light.turn_off', target: { entity_id: target } },
 	}
 
-	// Build turn_on action - reset brightness helper if dimmable
 	if (hasBrightness) {
-		templateLight.turn_on = [
-			{ service: 'light.turn_on', target: { entity_id: fixture.power } },
-			{
-				service: 'input_number.set_value',
-				target: { entity_id: `input_number.${fixtureId}_brightness` },
-				data: { value: defaultBrightness },
-			},
-		]
-	} else {
-		templateLight.turn_on = { service: 'light.turn_on', target: { entity_id: fixture.power } }
+		templateLight.level_template = `{{ state_attr('${underlyingId}', 'brightness') | int }}`
+		templateLight.set_level = {
+			service: 'light.turn_on',
+			target: { entity_id: target },
+			data: { brightness: '{{ brightness }}' },
+		}
 	}
 
-	// Add level_template and set_level action if dimmable
-	// Uses input_number helper to avoid stale brightness from bulb after power cycles
-	if (hasBrightness) {
-		templateLight.level_template = `{{ states('input_number.${fixtureId}_brightness') | int }}`
-		templateLight.set_level = [
-			{
-				choose: [
-					{
-						conditions: [
-							{ condition: 'template', value_template: '{{ brightness | int > 0 }}' },
-						],
-						sequence: [
-							{
-								service: `script.${fixtureId}_ev_throttler`,
-								data: { brightness: '{{ brightness }}' },
-							},
-						],
-					},
-				],
-			},
-		]
-	}
-
-	// Add temperature_template if tunable
 	if (controls.includes('color_temp') && primaryDimmable) {
 		templateLight.temperature_template = `{{ state_attr('${primaryDimmable.entity_id}', 'color_temp') }}`
-		templateLight.set_temperature = [
-			{ service: 'light.turn_on', target: { entity_id: fixture.power } },
-			{ wait_template: buildWaitTemplate(dimmableIds), timeout: '00:00:05' },
-			{
-				service: 'light.turn_on',
-				target: { entity_id: dimmableIds.length === 1 ? dimmableIds[0] : dimmableIds },
-				data: { color_temp: '{{ color_temp }}' },
-			},
-		]
+		templateLight.set_temperature = {
+			service: 'light.turn_on',
+			target: { entity_id: target },
+			data: { color_temp: '{{ color_temp }}' },
+		}
 	}
 
-	// Return legacy platform format structure
 	return {
 		platform: 'template',
 		lights: { [fixtureId]: templateLight },
@@ -614,7 +626,7 @@ export function getSyncedEntityIds(syncedEntities) {
 
 /**
  * Get entity IDs of generated light groups (fixtures with power null and 2+ dimmables).
- * Used so area light groups can include the group entity instead of only the member bulbs.
+ * Used so area package can exclude these internal entities from the area group (template wraps them).
  * @param {Record<string, import('../types/config.d.ts').SyncedFixture>} syncedEntities
  * @returns {string[]}
  */
@@ -628,4 +640,15 @@ export function getGeneratedGroupEntityIds(syncedEntities) {
 	}
 
 	return ids
+}
+
+/**
+ * Get entity IDs of template lights (light.${fixtureId}) for all synced fixtures.
+ * Used so area light groups include the template as the target entity for each fixture.
+ * @param {Record<string, import('../types/config.d.ts').SyncedFixture>} syncedEntities
+ * @returns {string[]}
+ */
+export function getWrapperEntityIds(syncedEntities) {
+	if (!syncedEntities) return []
+	return Object.keys(syncedEntities).map(fixtureId => `light.${fixtureId}`)
 }
