@@ -325,9 +325,10 @@ export function generateLightGroup(fixtureId, fixture) {
 	const dimmables = getDimmableEntities(fixture)
 	if (dimmables.length <= 1) return null
 
+	// Name must slug to <fixtureId>_group so entity_id is light.<fixtureId>_group (matches getDashboardEntity)
 	return [{
 		platform: 'group',
-		name: fixture.name,
+		name: `${fixtureId}_group`,
 		unique_id: `${fixtureId}_group`,
 		entities: dimmables.map(e => e.entity_id),
 	}]
@@ -606,6 +607,24 @@ export function getSyncedEntityIds(syncedEntities) {
 		for (const entity of fixture.entities) {
 			if ('entity_id' in entity) ids.add(entity.entity_id)
 		}
+	}
+
+	return ids
+}
+
+/**
+ * Get entity IDs of generated light groups (fixtures with power null and 2+ dimmables).
+ * Used so area light groups can include the group entity instead of only the member bulbs.
+ * @param {Record<string, import('../types/config.d.ts').SyncedFixture>} syncedEntities
+ * @returns {string[]}
+ */
+export function getGeneratedGroupEntityIds(syncedEntities) {
+	const ids = []
+
+	for (const [fixtureId, fixture] of Object.entries(syncedEntities || {})) {
+		if (fixture.power) continue
+		const dimmables = getDimmableEntities(fixture)
+		if (dimmables.length >= 2) ids.push(`light.${fixtureId}_group`)
 	}
 
 	return ids

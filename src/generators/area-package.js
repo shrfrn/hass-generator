@@ -3,7 +3,7 @@ import { join } from 'path'
 import { writeYamlFile, generateHeader } from './yaml-utils.js'
 import { extractPrefix } from '../utils/entity.js'
 import { sanitizeFileName } from '../utils/strings.js'
-import { processSyncedEntities, getSyncedEntityIds } from './synced-entities.js'
+import { processSyncedEntities, getSyncedEntityIds, getGeneratedGroupEntityIds } from './synced-entities.js'
 
 export async function generateAreaPackages(inventory, config, packagesDir) {
 	const { areas, entities, scenes } = inventory
@@ -124,8 +124,9 @@ function buildLightGroup({ area, entities, areaConfig, globalConfig }) {
 		.map(e => e.entity_id)
 		.filter(id => !excludeSet.has(id))
 
-	// Combine with explicit includes (for switches, etc.)
-	const allLights = [...new Set([...areaLights, ...includes])]
+	// Include generated group entities (power null + 2+ dimmables) so area group lists the group, not only member bulbs
+	const generatedGroupIds = getGeneratedGroupEntityIds(areaConfig.syncedEntities)
+	const allLights = [...new Set([...areaLights, ...includes, ...generatedGroupIds])]
 
 	if (allLights.length === 0) {
 		return { lightGroup: null, included: [], excluded: [] }
