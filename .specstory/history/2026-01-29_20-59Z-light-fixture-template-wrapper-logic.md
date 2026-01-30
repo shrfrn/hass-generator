@@ -17107,3 +17107,408 @@ Keeping the sync automation **in addition** to the group (for entities with `syn
 
 ---
 
+_**User**_
+
+just to clarify, when you say Physical/local changes (e.g. wall switch) only update that one bulb’s state - you are describing a fixture with a physical switch controlling the power to one bulb (main bulb), and other bulbs, even if they belong to a group with that main bulb, will not remain synced with it without a sync automation? 
+
+---
+
+_**Agent (model default, mode Agent)**_
+
+<think><details><summary>Thought Process</summary>
+
+The user is asking me to clarify what I meant by "Physical/local changes (e.g. wall switch) only update that one bulb's state" in the context of Approach B (group when 2+ bulbs).
+
+I will think through the scenario:
+
+**Fixture with 2+ bulbs, no power entity (all bulbs always powered):**
+- Bulb A and Bulb B are in a group. Template wraps the group.
+- There is no "physical switch controlling power" in this case - the bulbs are smart bulbs, always powered. So "physical switch" doesn't quite apply here for a typical "no power" fixture.
+
+**Fixture with a physical switch controlling power to one bulb:**
+- Actually in the user's config model, "power" is a separate entity (e.g. switch or light that controls mains). So you could have:
+  - fixture.power = switch.x (wall switch controls power to the whole fixture)
+  - Then when you flip the switch, power goes to all bulbs. So all bulbs lose/gain power together. They're not "one bulb gets power from switch, others don't."
+
+Or:
+  - A fixture where one bulb is on a physical switch (so when you flip the switch, that one bulb turns on/off) and other bulbs are always powered (e.g. same circuit but the "main" bulb is the one with the switch in line). So flipping the switch only affects bulb A; bulbs B and C are always powered and need to be turned on/off via HA. In that case, when you flip the switch:
+  - Bulb A turns on/off (physical)
+  - Bulbs B and C don't change (they're not on that switch)
+  - So the "fixture" is out of sync - A is on, B and C are off (or vice versa)
+  - The sync automation would detect "A turned on" and turn on B and C (and vice versa). So the sync automation is what keeps B and C in line with A when the physical switch is used.
+
+So yes - the user is correctly interpreting: when there's a physical switch that only controls one bulb (the "main" one), the other bulbs in the group don't get power/toggle from that switch. So their state doesn't change when you flip the switch. Without a sync automation, they would stay whatever they were (on/off) while the main bulb follows the switch. The sync automation is what propagates "main bulb turned on" → turn on the others, and "main bulb turned off" → turn off the others.
+
+So my clarification: Yes. I was describing a scenario where one bulb (main) is controlled by a physical switch (power or just on/off), and the other bulbs are in the same fixture/group but are not on that switch. So when you flip the wall switch, only the main bulb's state changes. The group's state in HA would update (because the group state is "on if any member is on") - so the group would show "on" if the main bulb is on. But the *other* bulbs (B, C) would still be in their previous state (on or off) unless something tells HA to turn them on/off. That "something" is the sync automation: when it sees "main bulb turned on," it runs turn_on on the other bulbs. So yes - without the sync automation, the other bulbs would not remain synced with the main bulb when the physical switch is used.
+</details></think>
+
+---
+
+
+Yes. That’s the situation I had in mind.
+
+**Setup:** One “main” bulb is on a physical wall switch (power or on/off). The other bulbs are in the same fixture/group in HA but are **not** on that switch (different circuit, or always-on supply).
+
+**When you flip the wall switch:**
+- Only the main bulb’s state changes (on/off).
+- The other bulbs’ states do **not** change; they stay as they were.
+
+**With a group but no sync automation:**
+- The group state in HA will still update (e.g. “on” if any member is on), because the group derives its state from its members.
+- So the **group** reflects “someone is on,” but the **other bulbs** are still in their old state. You get one bulb following the switch and the rest not.
+
+**With the sync automation:**
+- The automation triggers on the main bulb’s state change (e.g. to `on` or `off`).
+- It then calls `turn_on` / `turn_off` on **all other** members of the fixture.
+- So the other bulbs are driven by HA to match the main bulb. That’s what keeps them in sync when the wall switch is used.
+
+So: **physical/local change = only the main bulb’s state changes; the others stay synced only if the sync automation runs** (and they’re in the sync entity list). The group alone does not update the other bulbs’ state when you use the wall switch.
+
+---
+
+_**User**_
+
+if we leave both the group and the sync automation, then any situation other this one, would have a redundancy, being double controlled by the group and the automation?
+
+---
+
+_**Agent (model default, mode Agent)**_
+
+<think><details><summary>Thought Process</summary>
+
+The user is asking: if we have both the group AND the sync automation, then in most situations wouldn't we have redundancy - i.e. the bulbs would be "double controlled" by both the group and the automation?
+
+I will think through the scenarios:
+
+**Scenario 1: User turns on the fixture via HA (dashboard, scene, automation targeting light.${fixtureId})**
+- Template receives turn_on → template turns on the group (or single bulb)
+- Group receives turn_on → group forwards to all member bulbs → bulbs A, B, C all turn on
+- Each bulb's state changes (e.g. A: off→on, B: off→on, C: off→on)
+- Sync automation: triggers on state change to on/off. So when A turns on, trigger fires. Action: turn on all *other* entities (B, C). But B and C are already turning on (from the group call). So we get: group call turns on A, B, C. Then maybe A's state change fires the automation which tries to turn on B, C again (redundant - they're already on). So yes - redundancy. The group already turned them all on; the sync automation would also fire (e.g. when A reports on) and tell B and C to turn on (no-op or duplicate call).
+
+**Scenario 2: Physical switch flips (only main bulb affected)**
+- Main bulb A turns on (physical). B and C unchanged.
+- Sync automation: triggers on A's state change. Turns on B and C. Good - no redundancy here, we need this.
+- Group: doesn't "do" anything - the group doesn't listen to the switch. The group state just reflects members (any on → group on). So no double control from the group in this case.
+
+**Scenario 3: User turns off the fixture via HA**
+- Template → group → turn_off all members. A, B, C all turn off.
+- Each bulb goes off. Sync automation could fire (e.g. when A goes off) and turn off B, C - but they're already turning off. Redundant.
+
+So the user is right: in every situation EXCEPT "one bulb changed state by itself (e.g. physical switch, or someone controlling one bulb directly)", we have:
+- Group does the work (one call turns all on/off)
+- Then one of the bulbs' state changes, which fires the sync automation, which then tries to turn the other bulbs on/off - but they're already in that state. So it's redundant (harmless but unnecessary service calls).
+
+The only situation where the sync automation is necessary is when ONE bulb's state changes without the group being used (physical switch, or direct control of one entity). Then the automation propagates to the others.
+
+So yes - the user is correct. With both group and sync automation:
+- Most of the time (HA-controlled turn on/off via template/group): group handles it; sync automation also fires and does redundant turn_on/turn_off on the other entities.
+- Only when a single bulb changes "by itself" (physical switch, or direct entity control): sync automation is needed and not redundant.
+
+So we have redundancy in the "group-controlled" path. The redundancy is harmless (idempotent - telling an already-on light to turn on again), but it's extra automation runs and service calls.
+</details></think>
+
+---
+
+
+Yes. With both the group and the sync automation you get:
+
+**When HA controls the fixture (dashboard, scene, automation → `light.${fixtureId}`):**
+1. Template turns on/off the **group**.
+2. Group turns on/off **all** member bulbs in one call.
+3. Each bulb’s state change can trigger the **sync automation** (e.g. “A went on”).
+4. The automation then calls turn_on/turn_off on the **other** bulbs — which are already on/off from the group call.
+
+So in that path the sync automation is redundant: the group already did the work; the automation just repeats it (extra triggers and service calls, but same end state).
+
+**When only one bulb changes by itself (physical switch, or someone controlling one entity directly):**
+- Only that bulb’s state changes.
+- The sync automation is what propagates that to the others.
+- Here the automation is needed; the group doesn’t help.
+
+So: **redundancy whenever the fixture is controlled via the group; sync automation is only non-redundant when a single bulb is changed outside the group.** The redundancy is harmless (idempotent) but adds extra automation runs and service calls when you use the template/group.
+
+---
+
+_**User**_
+
+does it make sense, for consistency, to place even a single bulb in a group?
+
+---
+
+_**Agent (model default, mode Agent)**_
+
+<think><details><summary>Thought Process</summary>
+
+The user is asking: for consistency, would it make sense to put even a single bulb in a group? So instead of:
+- 1 bulb: template wraps the bulb directly (no group)
+- 2+ bulbs: template wraps a group
+
+We'd have:
+- 1 bulb: create a "group" of one entity, template wraps that group
+- 2+ bulbs: create a group, template wraps that group
+
+So the template would always wrap a group (of 1 or more members). That would give:
+- One mental model: fixture = template wrapping a group, always
+- Same code path: getUnderlyingLightTarget always returns light.${fixtureId}_group (and we'd always generate a group for every fixture with at least one bulb)
+- Scenes/automations/UI: always target light.${fixtureId}; the template always delegates to light.${fixtureId}_group
+
+Pros:
+- Consistency: every fixture has the same structure (template → group → member(s))
+- Simpler logic: no "single bulb = wrap entity directly, multiple = wrap group" branching
+- If you add a second bulb to a fixture later, you just add it to the group; no structural change (template still wraps group)
+- getUnderlyingLightTarget could always return light.${fixtureId}_group; generateLightGroup would create a group for 1+ entities (not just 2+)
+
+Cons:
+- Single-bulb fixture gets an extra entity (light.${fixtureId}_group) that's a group of one. Slightly odd / redundant in HA (a group of one still works, but it's an extra entity)
+- Some might find "group of one" semantically odd
+
+Does HA support a light group with one member? Yes - you can have a group with a single entity. It works fine.
+
+So the question is really: is the consistency worth the extra entity and the "group of one" concept? I'll lay out pros and cons and let the user decide.
+</details></think>
+
+---
+
+
+**Yes, it can make sense for consistency.**
+
+**If every fixture is “template → group” (including single-bulb):**
+
+- **Same structure everywhere:** Fixture = `light.${fixtureId}` (template) → `light.${fixtureId}_group` (group) → one or more bulbs. No special case for “1 bulb = wrap bulb, 2+ = wrap group.”
+- **Simpler logic:** `getUnderlyingLightTarget` always returns `light.${fixtureId}_group`. `generateLightGroup` creates a group for every fixture that has at least one bulb (1+ entities), not only 2+.
+- **Easier evolution:** Adding a second bulb to a fixture = add it to the group. The template and automation setup stay the same; no switch from “single entity” to “group.”
+- **One pattern for sync:** Sync automation can always “sync other members to the one that changed.” For a group of one, “others” is empty, so the automation still runs but does nothing extra. Same code path for all fixtures.
+
+**Tradeoffs:**
+
+- **Extra entity:** Single-bulb fixtures get a group of one (`light.${fixtureId}_group`). HA supports it; it’s just one more entity per such fixture.
+- **“Group of one”:** Some find it odd semantically, but it behaves like “one light” and keeps the model uniform.
+
+**Summary:** Placing every bulb in a group (including single-bulb) gives a consistent “template → group → members” model and simpler generator/automation logic; the cost is one extra group entity per single-bulb fixture and the “group of one” idea. Whether it’s worth it is mainly a design preference; technically it’s sound.
+
+---
+
+_**User**_
+
+in the current setup, when there is a group, and a wall switch (sync: true) , the sync automation syncs the group and switch or the individual bulbs and the switch?
+
+---
+
+_**Agent (model default, mode Agent)**_
+
+<think><details><summary>Thought Process</summary>
+
+The user is asking: in the current setup, when we have a fixture with a group (2+ dimmables, no power) and a wall switch that's sync: true - does the sync automation sync:
+A) the group entity and the switch (i.e. when group turns on, turn on switch; when switch turns on, turn on group), or
+B) the individual bulbs and the switch (i.e. when any bulb turns on, turn on switch and other bulbs; when switch turns on, turn on all bulbs)?
+
+I need to look at what entities get sync: true. In the config, the fixture has entities - some are lights (bulbs), some might be switches (e.g. wall switch). So sync: true would be on entities that should stay in sync. So we could have:
+- entity 1: light.bulb_a (sync: true)
+- entity 2: light.bulb_b (sync: true)
+- entity 3: switch.wall_switch (sync: true)?
+
+Or is the wall switch a different kind of entity? I will check - getSyncEntities returns fixture.entities.filter(e => e.sync && 'entity_id' in e). So any entity with sync: true and an entity_id is in the sync set. So the sync set could include:
+- Light entities (bulbs)
+- Switch entities (if the wall switch is represented as a switch entity with entity_id)
+
+So the sync automation triggers on state changes (on/off) of all those entity_ids. So it's the **individual** entities (bulbs, switch, etc.) that are in the sync list - not the group. The group is a generated entity (light.${fixtureId}_group); it's not part of the fixture's entities in the config. So the sync automation syncs the **individual bulbs and the switch** (or whatever entities have sync: true in the config). The group is not one of the sync entities - the group is just a logical aggregate we create for control. So when the switch turns on, the automation turns on "all others" in the sync list (the bulbs). When a bulb turns on, the automation turns on the switch and the other bulbs. So it's individual bulbs + switch, not group + switch.
+</details></think>
+
+---
+
+
+Checking which entities are included in the sync automation:
+
+
+---
+
+<tool-use data-tool-type="read" data-tool-name="read_file_v2">
+<details><summary>Tool use: **read_file_v2** • Read file: /Users/sharonfrenkel/Dev/hass-generator/src/generators/synced-entities.js</summary>
+
+</details>
+</tool-use>
+
+---
+
+<tool-use data-tool-type="read" data-tool-name="read_file_v2">
+<details><summary>Tool use: **read_file_v2** • Read file: /Users/sharonfrenkel/Dev/hass-generator/src/generators/synced-entities.js</summary>
+
+</details>
+</tool-use>
+
+---
+
+<tool-use data-tool-type="read" data-tool-name="read_file_v2">
+<details><summary>Tool use: **read_file_v2** • Read file: /Users/sharonfrenkel/Dev/hass-generator/src/generators/synced-entities.js</summary>
+
+</details>
+</tool-use>
+
+---
+
+<think><details><summary>Thought Process</summary>
+
+So:
+
+1. **getSyncEntities** returns entities from **fixture.entities** that have `sync: true` and an `entity_id`. So the sync list is whatever the user configures in the fixture - e.g. light.bulb_a, light.bulb_b, switch.wall_switch. These are the **config-defined** entities.
+
+2. **generateLightGroup** creates a group whose members are **dimmables.map(e => e.entity_id)** - i.e. only the dimmable bulb entity_ids. The group does NOT include the switch. So the group is light.${fixtureId}_group with entities [bulb_a, bulb_b].
+
+3. The **sync automation** uses **syncEntities** - the entities from the config with sync: true. So it triggers on state changes of those entities (bulbs + switch, or whatever is in the config), and when one changes, it turns all *others* in that list to the same state. So it syncs **individual bulbs and the switch** (the config entities with sync: true). The group is never in the sync list - the group is a generated entity, not part of fixture.entities. So the sync automation does not "sync the group and the switch" - it syncs the individual bulbs and the switch. When the switch turns on, the automation turns on the other entities in the sync list (the bulbs). When a bulb turns on (e.g. because we turned on the group), the automation turns on the switch and the other bulbs.
+</details></think>
+
+---
+
+
+**The sync automation syncs the individual bulbs and the switch — not the group.**
+
+Reason:
+
+1. **Sync list** comes from **getSyncEntities(fixture)**  
+   That’s every entry in **fixture.entities** with `sync: true` and an `entity_id`. So the sync list is only what you define in config: e.g. `light.bulb_a`, `light.bulb_b`, `switch.wall_switch`. It does **not** include the generated group.
+
+2. **The group is generated, not configured**  
+   `light.${fixtureId}_group` is created by the generator and its members are the dimmable bulbs (from **dimmables.map(e => e.entity_id)**). The group is never part of **fixture.entities**, so it’s never in the sync list.
+
+3. **What the automation does**  
+   It triggers on state changes of the **sync entities** (the bulbs + switch from config). When any of them goes on/off, it calls `homeassistant.turn_on` / `turn_off` on **all other sync entities** (same list, minus the one that changed). So it keeps the **individual bulbs and the switch** in sync with each other.
+
+So: **sync is between the configured entities (bulbs + switch), not between the group and the switch.** When you flip the wall switch, the automation turns the bulbs on/off. When you turn the group on/off (or a single bulb), the automation runs on the sync list (bulbs + switch) and updates the others, including the switch, to match.
+
+---
+
+_**User**_
+
+if we generate a group for any number of bulbs of any type, could the automation sync the group instead of bulbs?
+
+---
+
+_**Agent (model default, mode Agent)**_
+
+<think><details><summary>Thought Process</summary>
+
+The user is asking: if we change the generator to create a group for any number of bulbs (1+), could we then have the sync automation sync the **group** and the switch (and any other sync entities) instead of syncing the individual bulbs and the switch?
+
+So instead of:
+- Sync list: [bulb_a, bulb_b, switch] → when any changes, turn on/off the others (so we'd turn on/off the other bulbs and the switch)
+
+We'd have:
+- Sync list: [light.${fixtureId}_group, switch] → when group or switch changes, turn on/off the other (turn on group + switch, or turn on switch + group)
+
+That would mean:
+1. When the switch turns on → automation turns on the group (which turns on all bulbs). Good.
+2. When the switch turns off → automation turns off the group. Good.
+3. When the group turns on (e.g. user turned on via template/dashboard) → automation turns on the switch. Good - but wait, can you "turn on" a wall switch? It depends. If the switch is a physical switch that reflects state (e.g. a smart switch that reports on/off), then turn_on/turn_off on the switch would work. If it's a physical switch that only controls power and doesn't have a "state" in HA that we can set... actually in HA you typically have switch.turn_on and switch.turn_off. So the switch entity can be turned on/off by HA (if it's a smart switch). So when the group turns on (because user turned on the fixture via dashboard), the automation would turn on the switch. That would make the physical switch state match (if it's a smart switch that can be controlled).
+
+So yes - we could have the sync list be [group, switch] instead of [bulb_a, bulb_b, switch]. Then:
+- Fewer entities in the sync list (2 instead of N+1)
+- When switch changes → turn on/off group (one call, group forwards to all bulbs)
+- When group changes (because any bulb changed, or because we turned on the group) → turn on/off switch
+
+But wait - if the sync list is [group, switch], when does "group changes" trigger? The group's state is derived from its members. So when we turn on the group, all bulbs turn on, and the group state becomes "on". So the group state change would trigger the automation. Then the automation would turn on the switch. Good.
+
+When the switch is flipped (physical), the switch state changes. Automation fires. Turn on/off the group. Group forwards to all bulbs. Good.
+
+When one bulb is controlled directly (e.g. someone turns on bulb_a only via HA)? Then bulb_a is on, but the group state might be "on" (any member on). The other bulbs might still be off. So the group state is "on" but not all members are on. The automation wouldn't fire from "group state change" in a way that turns on the other bulbs - the group didn't change (it was already "on" if bulb_a was on, or it goes to "on"). Actually if bulb_a turns on, the group state becomes "on". So the automation would trigger (group state to on). Then the action would be: turn on the "others" in the sync list - i.e. turn on the switch. So we'd turn on the switch, but we wouldn't turn on the other bulbs - because the "others" in the sync list is just [switch]. So if someone turns on only bulb_a, we'd get: automation fires (group went on), turn on switch. Bulbs B and C would still be off. So we'd have switch on, bulb_a on, bulbs B and C off. That's inconsistent. So syncing [group, switch] only keeps the switch in sync with the group (and the group in sync with the switch). It does NOT keep the individual bulbs in sync with each other. So if one bulb is turned on directly (not via the group), the group state becomes "on", the automation turns on the switch, but the other bulbs don't get turned on. So we'd need the sync to be either:
+- [group, switch] - keeps group and switch in sync. But then if one bulb is turned on directly, the other bulbs don't follow (group state is "on", we turn on switch, but we don't turn on the other bulbs).
+- [bulb_a, bulb_b, bulb_c, switch] - keeps all bulbs and switch in sync. When any bulb or switch changes, the others follow.
+
+So if we sync [group, switch] only:
+- Pro: Simpler sync list (2 entities). When switch flips, one call to turn on/off group. No redundancy when we control via group (when we turn on group, group turns on all bulbs; then group state change might fire automation which turns on switch - that's one extra call to switch, which is fine).
+- Con: When one bulb is turned on directly (e.g. via HA or physically if only one bulb is on a switch), the group state goes "on", automation turns on switch, but the other bulbs don't get turned on. So we lose "sync all bulbs to each other" unless we only ever control via the group or the switch.
+
+So the answer is: **Yes, we could** have the sync automation sync the group and the switch instead of the individual bulbs and the switch. That would work for the primary case (switch controls group; group controls bulbs; when either changes, sync the other). But we'd **lose** the behavior where "one bulb turned on directly" propagates to the other bulbs and the switch - because the automation would only propagate to the "other" entity in the sync list (the switch), not to the other bulbs. So it depends on the use case: if we only ever control via the template/group or the switch, then syncing [group, switch] is enough and is simpler. If we need "any bulb can be toggled and the rest follow", then we need the sync list to include the individual bulbs (and switch).
+
+I'll explain this to the user.
+</details></think>
+
+---
+
+
+Yes, you can. The sync automation can use **group + switch** instead of **bulbs + switch**.
+
+**If sync list is [group, switch]:**
+
+- **Switch changes** → automation runs → `turn_on` / `turn_off` on the group → group updates all bulbs. Same behavior as today.
+- **Group changes** (e.g. you turned the fixture on from the UI) → automation runs → `turn_on` / `turn_off` on the switch. Switch and group stay in sync.
+- **Fewer entities in the sync list** (2 instead of N bulbs + switch), so less trigger traffic and simpler logic.
+- **When you control via template/group**, the group turns the bulbs on/off; the automation then only updates the switch. No redundant calls to individual bulbs.
+
+**Tradeoff:**
+
+- **One bulb changed directly** (e.g. only `light.bulb_a` is turned on via HA or a physical switch that only feeds that bulb):  
+  The group state becomes “on” (any member on), so the automation runs and turns the **switch** on. The **other bulbs** are not in the sync list, so they are not turned on. So you get: switch on, bulb_a on, other bulbs off.  
+  With **bulbs + switch** in the sync list, turning on one bulb would trigger the automation to turn on all other bulbs and the switch.
+
+So:
+
+- **Sync group + switch:** good if the only “sources of truth” are the group (template/UI) and the wall switch. Simpler, no redundancy when using the group.
+- **Sync bulbs + switch:** needed if you want “any bulb (or switch) changes → all bulbs and switch follow,” including when a single bulb is turned on/off directly.
+
+If you’re fine with “fixture is only controlled via template or wall switch,” syncing the **group** and the switch is consistent and avoids redundant control of individual bulbs.
+
+---
+
+_**User**_
+
+im trying to think of a realistic use case where i would want to turn on only some of the bulbs in a fixture... and how i might handle that if we migrate to a group which is synced rather than individual bulbs (a scene?)
+
+---
+
+_**Agent (model default, mode Agent)**_
+
+<think><details><summary>Thought Process</summary>
+
+The user is thinking through: if we migrate to syncing [group, switch] instead of [bulbs, switch], we lose the ability to have "one bulb turned on → all follow." They're asking: is there a realistic use case where I'd want to turn on only *some* bulbs in a fixture (not all), and if so, how would I handle that with the group+switch sync model? Could a scene do it?
+
+Use cases for "only some bulbs in a fixture on":
+1. **Ambience** - e.g. living room fixture with 3 bulbs: "movie mode" = only the dim one on, "full" = all on. That's a scene: different combinations of bulb states.
+2. **Partial failure** - one bulb is broken, you want to turn on the others. You'd do that by controlling the group (all on) and... the broken one stays off. Or you'd need to control bulbs individually to exclude the broken one. With a group, you can't "turn on all except bulb 2" - the group is all or nothing per bulb. So if one bulb is broken, turning on the group would try to turn on all; the broken one might show "on" in HA but not actually light. So "partial" here is more about physical reality than intent.
+3. **Zoning within a fixture** - e.g. a long strip or multi-head fixture where you sometimes want "left half" vs "right half" vs all. That would be different entities or a scene that sets specific bulbs.
+4. **Scene** - "Evening" = bulb 1 at 50%, bulb 2 off, bulb 3 at 100%. That's a scene that targets individual bulb entity_ids and sets each bulb's state. So you're not using the group for that - you're using a scene that directly controls bulb_a, bulb_b, bulb_c (and maybe the switch). So the scene would bypass the group. When you activate that scene, the bulbs get set. The group state would then reflect (any on → on). The switch - with group+switch sync - would get turned on by the automation when the group state goes "on". So if the scene turns on 2 of 3 bulbs, group goes "on", automation turns on the switch. That might be what you want (switch on = power available) or not. If one bulb is off by scene choice, the switch would still turn on. So the sync would be: scene sets bulbs → group state updates → automation turns on switch. The bulbs stay as the scene set them. So scenes that target individual bulbs still work; you're not "turning on only some" via the group - you're using a scene (or automation) that calls light.turn_on/turn_off with specific entity_ids (the bulbs). So the answer is: if you want "only some bulbs on" in a fixture, you do it via a **scene** (or automation) that targets the **individual bulb entity_ids**, not the group. The group is for "turn the whole fixture on/off as one." Scenes give you arbitrary combinations. With group+switch sync, when you activate a scene that turns on some bulbs, the group state becomes "on", and the automation would turn on the switch. So you'd have: scene → bulbs set individually → group reflects state → switch synced to group. That's consistent. If the scene turns all bulbs off, group goes off, automation turns off switch. Good. So the user doesn't "lose" the ability to have partial fixture states - they just do it via scenes (or automations) that target the bulbs directly. The group is for "whole fixture on/off"; scenes handle "this combination of bulb states."
+</details></think>
+
+---
+
+
+**Realistic “only some bulbs” use cases**
+
+- **Ambience** – e.g. “movie” = one bulb dim, others off; “full” = all on. Different combinations per “mode.”
+- **Zoning** – e.g. “left half on, right half off” on a multi‑bulb fixture.
+- **Asymmetric** – e.g. one bulb at 100%, one at 50%, one off.
+
+You don’t do that by turning “the fixture” on/off; you do it by setting **each bulb’s state** (on/off, brightness, etc.).
+
+**How to do it with group + switch sync**
+
+Use a **scene** (or automation) that targets the **individual bulb entity_ids**, not the group:
+
+- Scene “Movie”: `light.bulb_a` on 20%, `light.bulb_b` off, `light.bulb_c` off.
+- Scene “Full”: `light.bulb_a` on, `light.bulb_b` on, `light.bulb_c` on (or equivalently, `light.${fixtureId}` on).
+
+So:
+
+- **Whole fixture on/off** → use the **group** (via template `light.${fixtureId}`): one entity, sync with switch.
+- **Specific combination of bulbs** → use a **scene** (or automation) that calls `light.turn_on` / `light.turn_off` (and brightness etc.) on the **bulb** entities.
+
+You’re not “turning on only some bulbs” through the group; you’re bypassing the group for that intent and controlling bulbs directly in the scene.
+
+**What happens to sync**
+
+When you activate a scene that turns on only some bulbs:
+
+- Those bulbs change state → **group** state becomes “on” (any member on).
+- Sync automation sees **group** → on → runs and turns the **switch** on.
+- Bulbs stay as the scene set them; the switch ends up on. So “partial fixture” is expressed by the scene; “switch follows fixture” is still group ↔ switch.
+
+If the scene turns all bulbs off, group goes off and the automation turns the switch off. So with group+switch sync, scenes that target the bulbs directly still work, and you keep a clear split: **group = whole fixture + switch**, **scenes = arbitrary bulb combinations**.
+
+---
+
+_**User**_
+
+currently, when power != null and multi bulbs - if the template receives power on + brightness, it needs to turn on the power and wait for all bulbs to come online? does it wait for all of them? 
+
+---
+
