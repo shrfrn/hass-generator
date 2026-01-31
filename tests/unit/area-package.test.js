@@ -191,8 +191,35 @@ describe('area-package.js', () => {
 			const content = readFileSync(join(TEST_DIR, 'areas/mb_bedroom.yaml'), 'utf8')
 			expect(content).toContain('automation:')
 			expect(content).toContain('mb_standing_lamp_sync')
+			// Sync triggers on group + non-light entities, not individual bulbs
 			expect(content).toContain('switch.mb_soc')
-			expect(content).toContain('light.mb_soc_bulb')
+			expect(content).toContain('light.mb_standing_lamp_group')
+		})
+
+		test('syncedEntities sync automation has mode: restart', async () => {
+			await generateAreaPackages(minimalInventory, generatorConfig, TEST_DIR)
+
+			const content = readFileSync(join(TEST_DIR, 'areas/mb_bedroom.yaml'), 'utf8')
+			// Extract automation section
+			const automationSection = content.match(/automation:[\s\S]*?(?=\n\w+:|$)/)?.[0] || ''
+			expect(automationSection).toContain('mode: restart')
+		})
+
+		test('syncedEntities sync automation filters targets by state', async () => {
+			await generateAreaPackages(minimalInventory, generatorConfig, TEST_DIR)
+
+			const content = readFileSync(join(TEST_DIR, 'areas/mb_bedroom.yaml'), 'utf8')
+			// The template should filter out entities already in target state
+			expect(content).toContain("reject('is_state', target_state)")
+		})
+
+		test('syncedEntities always generates light group even for single bulb', async () => {
+			await generateAreaPackages(minimalInventory, generatorConfig, TEST_DIR)
+
+			const content = readFileSync(join(TEST_DIR, 'areas/mb_bedroom.yaml'), 'utf8')
+			// Group should be created for the fixture
+			expect(content).toContain('platform: group')
+			expect(content).toContain('mb_standing_lamp_group')
 		})
 
 		test('syncedEntities with power generates template light', async () => {

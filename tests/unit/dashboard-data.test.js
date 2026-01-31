@@ -120,8 +120,9 @@ describe('dashboard/data.js', () => {
 
 			// Individual synced entities should not appear
 			expect(lightIds).not.toContain('switch.mb_soc')
-			// But the synced fixture dashboard entity should appear
-			expect(lightIds).toContain('light.mb_soc_bulb')
+			expect(lightIds).not.toContain('light.mb_soc_bulb')
+			// But the fixture's template light (dashboard entity) should appear
+			expect(lightIds).toContain('light.mb_standing_lamp')
 		})
 
 		test('synced fixture excluded when its dashboard entity is in excluded_lights', () => {
@@ -131,7 +132,7 @@ describe('dashboard/data.js', () => {
 					...dashboardConfig.areas,
 					bedroom: {
 						...dashboardConfig.areas.bedroom,
-						excluded_lights: ['light.mb_soc_bulb'],
+						excluded_lights: ['light.mb_standing_lamp'],
 					},
 				},
 			}
@@ -139,17 +140,18 @@ describe('dashboard/data.js', () => {
 			const bedroom = result.find(r => r.area.id === 'bedroom')
 			const lightIds = bedroom.lights.map(l => l.entity_id)
 
-			expect(lightIds).not.toContain('light.mb_soc_bulb')
+			expect(lightIds).not.toContain('light.mb_standing_lamp')
 		})
 
 		test('synced fixture appears in lights with correct toggle entity', () => {
 			const result = prepareAllAreaData(minimalInventory, dashboardConfig, generatorConfig)
 			const bedroom = result.find(r => r.area.id === 'bedroom')
-			const fixture = bedroom.lights.find(l => l.entity_id === 'light.mb_soc_bulb')
+			const fixture = bedroom.lights.find(l => l.entity_id === 'light.mb_standing_lamp')
 
 			expect(fixture).toBeDefined()
 			expect(fixture.name).toBe('Master Bedroom Standing Lamp')
-			expect(fixture.toggle_entity).toBe('switch.mb_soc')
+			// Toggle entity is the template light (which wraps the group)
+			expect(fixture.toggle_entity).toBe('light.mb_standing_lamp')
 			expect(fixture.dimmable).toBe(true)
 			expect(fixture.is_synced_fixture).toBe(true)
 		})

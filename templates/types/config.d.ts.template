@@ -59,6 +59,13 @@ interface SyncedDeviceBase {
   sync: boolean
 
   /**
+   * Optional name for this device, used in automation naming.
+   * For blueprint devices, this becomes part of the automation ID and alias.
+   * @example 'shahar' -> automation ID: 'fixture_remote_shahar'
+   */
+  name?: string
+
+  /**
    * Control capabilities for this element.
    * Determines what template actions are generated.
    * @default ['on', 'off']

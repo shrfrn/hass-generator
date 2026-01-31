@@ -2630,3 +2630,865 @@ Should I implement this change?
 
 ---
 
+_**User**_
+
+The helper which tracks the fixure's bulb brightness gets updated when the fixture is activated from the remote. shouldn't it be updated when controlling the fixture from the dashboard and the actuator (knx) as well?
+
+---
+
+_**Agent (model default, mode Agent)**_
+
+
+Checking how the brightness helper is updated and where it might be missing updates:
+
+
+---
+
+<tool-use data-tool-type="read" data-tool-name="read_file_v2">
+<details><summary>Tool use: **read_file_v2** • Read file: /Users/sharonfrenkel/Dev/hass-generator/src/generators/synced-entities.js</summary>
+
+</details>
+</tool-use>
+
+---
+
+<tool-use data-tool-type="unknown" data-tool-name="ripgrep_raw_search">
+<details>
+<summary>Tool use: **ripgrep_raw_search**</summary>
+
+
+Parameters:
+
+```json
+{
+  "pattern": "brightness|input_number.*brightness",
+  "path": "/Users/sharonfrenkel/Dev/hass-generator/src/generators",
+  "caseInsensitive": true
+}
+```
+Result:
+
+```json
+{
+  "success": {
+    "pattern": "brightness|input_number.*brightness",
+    "path": "/Users/sharonfrenkel/Dev/hass-generator/src/generators",
+    "outputMode": "content",
+    "workspaceResults": {
+      "/Users/sharonfrenkel/Dev/hass-generator": {
+        "content": {
+          "matches": [
+            {
+              "file": "src/generators/synced-entities.js",
+              "matches": [
+                {
+                  "lineNumber": 18,
+                  "content": "\t\tdimmable: ['on', 'off', 'brightness'],"
+                },
+                {
+                  "lineNumber": 19,
+                  "content": "\t\ttunable: ['on', 'off', 'brightness', 'color_temp'],"
+                },
+                {
+                  "lineNumber": 20,
+                  "content": "\t\trgb: ['on', 'off', 'brightness', 'rgb'],"
+                },
+                {
+                  "lineNumber": 27,
+                  "content": " * Get dimmable entities from a fixture (entities with entity_id and brightness control)"
+                },
+                {
+                  "lineNumber": 36,
+                  "content": "\t\t\treturn controls.includes('brightness')"
+                },
+                {
+                  "lineNumber": 111,
+                  "content": "\t\tconst toggleEntity = syncEntities.find(e =&gt; !resolveControls(e.controls).includes('brightness'))"
+                },
+                {
+                  "lineNumber": 123,
+                  "content": "\t\tconst toggleEntity = syncEntities.find(e =&gt; !resolveControls(e.controls).includes('brightness'))"
+                },
+                {
+                  "lineNumber": 161,
+                  "content": " * Generate input_number helper for brightness tracking"
+                },
+                {
+                  "lineNumber": 162,
+                  "content": " * Used to avoid stale brightness values from Zigbee bulbs after power cycles"
+                },
+                {
+                  "lineNumber": 167,
+                  "content": "export function generateBrightnessHelper(fixtureId, fixture) {"
+                },
+                {
+                  "lineNumber": 173,
+                  "content": "\tconst defaultBrightness = fixture.default_brightness ?? 254"
+                },
+                {
+                  "lineNumber": 176,
+                  "content": "\t\t[&#96;${fixtureId}_brightness&#96;]: {"
+                },
+                {
+                  "lineNumber": 177,
+                  "content": "\t\t\tname: &#96;${fixture.name} Brightness&#96;,"
+                },
+                {
+                  "lineNumber": 181,
+                  "content": "\t\t\tinitial: defaultBrightness,"
+                },
+                {
+                  "lineNumber": 188,
+                  "content": " * Generate event throttler script for brightness control with flood protection"
+                },
+                {
+                  "lineNumber": 208,
+                  "content": "\t\t\t\tbrightness: { description: 'Brightness level (0-255)' },"
+                },
+                {
+                  "lineNumber": 219,
+                  "content": "\t\t\t\t\tdata: { brightness: '{{ brightness }}' },"
+                },
+                {
+                  "lineNumber": 223,
+                  "content": "\t\t\t\t\ttarget: { entity_id: &#96;input_number.${fixtureId}_brightness&#96; },"
+                },
+                {
+                  "lineNumber": 224,
+                  "content": "\t\t\t\t\tdata: { value: '{{ brightness }}' },"
+                },
+                {
+                  "lineNumber": 244,
+                  "content": "\tconst defaultBrightness = fixture.default_brightness ?? 254"
+                },
+                {
+                  "lineNumber": 248,
+                  "content": "\tconst hasBrightness = controls.includes('brightness') &amp;&amp; primaryDimmable"
+                },
+                {
+                  "lineNumber": 257,
+                  "content": "\t// Build turn_on action - reset brightness helper if dimmable"
+                },
+                {
+                  "lineNumber": 258,
+                  "content": "\tif (hasBrightness) {"
+                },
+                {
+                  "lineNumber": 263,
+                  "content": "\t\t\t\ttarget: { entity_id: &#96;input_number.${fixtureId}_brightness&#96; },"
+                },
+                {
+                  "lineNumber": 264,
+                  "content": "\t\t\t\tdata: { value: defaultBrightness },"
+                },
+                {
+                  "lineNumber": 272,
+                  "content": "\t// Uses input_number helper to avoid stale brightness from bulb after power cycles"
+                },
+                {
+                  "lineNumber": 273,
+                  "content": "\tif (hasBrightness) {"
+                },
+                {
+                  "lineNumber": 274,
+                  "content": "\t\ttemplateLight.level_template = &#96;{{ states('input_number.${fixtureId}_brightness') | int }}&#96;"
+                },
+                {
+                  "lineNumber": 280,
+                  "content": "\t\t\t\t\t\t\t{ condition: 'template', value_template: '{{ brightness | int &gt; 0 }}' },"
+                },
+                {
+                  "lineNumber": 285,
+                  "content": "\t\t\t\t\t\t\t\tdata: { brightness: '{{ brightness }}' },"
+                },
+                {
+                  "lineNumber": 440,
+                  "content": "\t\t\t// Brightness triggers only for dim devices in step mode"
+                },
+                {
+                  "lineNumber": 444,
+                  "content": "\t\t\t\t\t{ domain: 'mqtt', device_id: device.device_id, type: 'action', subtype: 'brightness_move_up', trigger: 'device', id: 'brightness_up' },"
+                },
+                {
+                  "lineNumber": 445,
+                  "content": "\t\t\t\t\t{ domain: 'mqtt', device_id: device.device_id, type: 'action', subtype: 'brightness_move_down', trigger: 'device', id: 'brightness_down' },"
+                },
+                {
+                  "lineNumber": 467,
+                  "content": "\t\t\t\t\t\tconditions: [{ condition: 'trigger', id: 'brightness_up' }],"
+                },
+                {
+                  "lineNumber": 468,
+                  "content": "\t\t\t\t\t\tsequence: [{ service: 'light.turn_on', target: { entity_id: dashboardEntity.entity_id }, data: { brightness_step_pct: stepPercent } }],"
+                },
+                {
+                  "lineNumber": 471,
+                  "content": "\t\t\t\t\t\tconditions: [{ condition: 'trigger', id: 'brightness_down' }],"
+                },
+                {
+                  "lineNumber": 472,
+                  "content": "\t\t\t\t\t\tsequence: [{ service: 'light.turn_on', target: { entity_id: dashboardEntity.entity_id }, data: { brightness_step_pct: -stepPercent } }],"
+                },
+                {
+                  "lineNumber": 500,
+                  "content": " * Separate automation with mode: restart so brightness_stop can interrupt"
+                },
+                {
+                  "lineNumber": 513,
+                  "content": "\t\t\t{ domain: 'mqtt', device_id: device.device_id, type: 'action', subtype: 'brightness_move_up', trigger: 'device', id: 'brightness_up' },"
+                },
+                {
+                  "lineNumber": 514,
+                  "content": "\t\t\t{ domain: 'mqtt', device_id: device.device_id, type: 'action', subtype: 'brightness_move_down', trigger: 'device', id: 'brightness_down' },"
+                },
+                {
+                  "lineNumber": 515,
+                  "content": "\t\t\t{ domain: 'mqtt', device_id: device.device_id, type: 'action', subtype: 'brightness_stop', trigger: 'device', id: 'brightness_stop' },"
+                },
+                {
+                  "lineNumber": 527,
+                  "content": "\t\t\t\t\tconditions: [{ condition: 'trigger', id: 'brightness_up' }],"
+                },
+                {
+                  "lineNumber": 532,
+                  "content": "\t\t\t\t\t\t\t\t{ service: 'light.turn_on', target: { entity_id: dashboardEntity.entity_id }, data: { brightness_step_pct: stepPercent } },"
+                },
+                {
+                  "lineNumber": 539,
+                  "content": "\t\t\t\t\tconditions: [{ condition: 'trigger', id: 'brightness_down' }],"
+                },
+                {
+                  "lineNumber": 544,
+                  "content": "\t\t\t\t\t\t\t\t{ service: 'light.turn_on', target: { entity_id: dashboardEntity.entity_id }, data: { brightness_step_pct: -stepPercent } },"
+                },
+                {
+                  "lineNumber": 551,
+                  "content": "\t\t\t\t\tconditions: [{ condition: 'trigger', id: 'brightness_stop' }],"
+                },
+                {
+                  "lineNumber": 572,
+                  "content": "\t\t// Generate brightness helper (if power entity + dimmable)"
+                },
+                {
+                  "lineNumber": 573,
+                  "content": "\t\tconst brightnessHelper = generateBrightnessHelper(fixtureId, fixture)"
+                },
+                {
+                  "lineNumber": 574,
+                  "content": "\t\tif (brightnessHelper) inputNumbers = { ...inputNumbers, ...brightnessHelper }"
+                }
+              ]
+            },
+            {
+              "file": "src/generators/dashboard/templates/bubble/renderer.js",
+              "matches": [
+                {
+                  "lineNumber": 207,
+                  "content": "\tconst { dimmable, brightness_entity, toggle_entity, has_advanced_controls, is_synced_fixture } = light"
+                },
+                {
+                  "lineNumber": 216,
+                  "content": "\t\tentity: brightness_entity,"
+                },
+                {
+                  "lineNumber": 222,
+                  "content": "\tconst toggleAction = brightness_entity !== toggle_entity"
+                },
+                {
+                  "lineNumber": 304,
+                  "content": "\t\t\t\tentity: entity.brightness_entity,"
+                }
+              ]
+            },
+            {
+              "file": "src/generators/dashboard/templates/bubble-views/renderer.js",
+              "matches": [
+                {
+                  "lineNumber": 327,
+                  "content": "\tconst { dimmable, brightness_entity, toggle_entity, has_advanced_controls, is_synced_fixture } = light"
+                },
+                {
+                  "lineNumber": 336,
+                  "content": "\t\tentity: brightness_entity,"
+                },
+                {
+                  "lineNumber": 341,
+                  "content": "\tconst toggleAction = brightness_entity !== toggle_entity"
+                },
+                {
+                  "lineNumber": 418,
+                  "content": "\t\t\t\tentity: entity.brightness_entity,"
+                }
+              ]
+            },
+            {
+              "file": "src/generators/dashboard/data.js",
+              "matches": [
+                {
+                  "lineNumber": 233,
+                  "content": "\t\t\treturn controls.includes('brightness')"
+                },
+                {
+                  "lineNumber": 242,
+                  "content": "\t\t\tbrightness_entity: dashboardInfo.entity_id,"
+                },
+                {
+                  "lineNumber": 259,
+                  "content": "\t\t\tresult.push({ entity_id: entityId, name: null, dimmable: false, brightness_entity: entityId, toggle_entity: entityId, has_advanced_controls: false })"
+                },
+                {
+                  "lineNumber": 287,
+                  "content": "\t\tbrightness_entity: companionBulb || entity.entity_id,"
+                }
+              ]
+            },
+            {
+              "file": "src/generators/area-package.js",
+              "matches": [
+                {
+                  "lineNumber": 70,
+                  "content": "\t// Input numbers for brightness tracking (avoids stale Zigbee values)"
+                }
+              ]
+            }
+          ],
+          "totalLines": 62,
+          "totalMatchedLines": 62
+        }
+      },
+      "/Users/sharonfrenkel/Dev/hass-config": {
+        "content": {
+          "matches": [
+            {
+              "file": "../hass-generator/src/generators/synced-entities.js",
+              "matches": [
+                {
+                  "lineNumber": 18,
+                  "content": "\t\tdimmable: ['on', 'off', 'brightness'],"
+                },
+                {
+                  "lineNumber": 19,
+                  "content": "\t\ttunable: ['on', 'off', 'brightness', 'color_temp'],"
+                },
+                {
+                  "lineNumber": 20,
+                  "content": "\t\trgb: ['on', 'off', 'brightness', 'rgb'],"
+                },
+                {
+                  "lineNumber": 27,
+                  "content": " * Get dimmable entities from a fixture (entities with entity_id and brightness control)"
+                },
+                {
+                  "lineNumber": 36,
+                  "content": "\t\t\treturn controls.includes('brightness')"
+                },
+                {
+                  "lineNumber": 111,
+                  "content": "\t\tconst toggleEntity = syncEntities.find(e =&gt; !resolveControls(e.controls).includes('brightness'))"
+                },
+                {
+                  "lineNumber": 123,
+                  "content": "\t\tconst toggleEntity = syncEntities.find(e =&gt; !resolveControls(e.controls).includes('brightness'))"
+                },
+                {
+                  "lineNumber": 161,
+                  "content": " * Generate input_number helper for brightness tracking"
+                },
+                {
+                  "lineNumber": 162,
+                  "content": " * Used to avoid stale brightness values from Zigbee bulbs after power cycles"
+                },
+                {
+                  "lineNumber": 167,
+                  "content": "export function generateBrightnessHelper(fixtureId, fixture) {"
+                },
+                {
+                  "lineNumber": 173,
+                  "content": "\tconst defaultBrightness = fixture.default_brightness ?? 254"
+                },
+                {
+                  "lineNumber": 176,
+                  "content": "\t\t[&#96;${fixtureId}_brightness&#96;]: {"
+                },
+                {
+                  "lineNumber": 177,
+                  "content": "\t\t\tname: &#96;${fixture.name} Brightness&#96;,"
+                },
+                {
+                  "lineNumber": 181,
+                  "content": "\t\t\tinitial: defaultBrightness,"
+                },
+                {
+                  "lineNumber": 188,
+                  "content": " * Generate event throttler script for brightness control with flood protection"
+                },
+                {
+                  "lineNumber": 208,
+                  "content": "\t\t\t\tbrightness: { description: 'Brightness level (0-255)' },"
+                },
+                {
+                  "lineNumber": 219,
+                  "content": "\t\t\t\t\tdata: { brightness: '{{ brightness }}' },"
+                },
+                {
+                  "lineNumber": 223,
+                  "content": "\t\t\t\t\ttarget: { entity_id: &#96;input_number.${fixtureId}_brightness&#96; },"
+                },
+                {
+                  "lineNumber": 224,
+                  "content": "\t\t\t\t\tdata: { value: '{{ brightness }}' },"
+                },
+                {
+                  "lineNumber": 244,
+                  "content": "\tconst defaultBrightness = fixture.default_brightness ?? 254"
+                },
+                {
+                  "lineNumber": 248,
+                  "content": "\tconst hasBrightness = controls.includes('brightness') &amp;&amp; primaryDimmable"
+                },
+                {
+                  "lineNumber": 257,
+                  "content": "\t// Build turn_on action - reset brightness helper if dimmable"
+                },
+                {
+                  "lineNumber": 258,
+                  "content": "\tif (hasBrightness) {"
+                },
+                {
+                  "lineNumber": 263,
+                  "content": "\t\t\t\ttarget: { entity_id: &#96;input_number.${fixtureId}_brightness&#96; },"
+                },
+                {
+                  "lineNumber": 264,
+                  "content": "\t\t\t\tdata: { value: defaultBrightness },"
+                },
+                {
+                  "lineNumber": 272,
+                  "content": "\t// Uses input_number helper to avoid stale brightness from bulb after power cycles"
+                },
+                {
+                  "lineNumber": 273,
+                  "content": "\tif (hasBrightness) {"
+                },
+                {
+                  "lineNumber": 274,
+                  "content": "\t\ttemplateLight.level_template = &#96;{{ states('input_number.${fixtureId}_brightness') | int }}&#96;"
+                },
+                {
+                  "lineNumber": 280,
+                  "content": "\t\t\t\t\t\t\t{ condition: 'template', value_template: '{{ brightness | int &gt; 0 }}' },"
+                },
+                {
+                  "lineNumber": 285,
+                  "content": "\t\t\t\t\t\t\t\tdata: { brightness: '{{ brightness }}' },"
+                },
+                {
+                  "lineNumber": 440,
+                  "content": "\t\t\t// Brightness triggers only for dim devices in step mode"
+                },
+                {
+                  "lineNumber": 444,
+                  "content": "\t\t\t\t\t{ domain: 'mqtt', device_id: device.device_id, type: 'action', subtype: 'brightness_move_up', trigger: 'device', id: 'brightness_up' },"
+                },
+                {
+                  "lineNumber": 445,
+                  "content": "\t\t\t\t\t{ domain: 'mqtt', device_id: device.device_id, type: 'action', subtype: 'brightness_move_down', trigger: 'device', id: 'brightness_down' },"
+                },
+                {
+                  "lineNumber": 467,
+                  "content": "\t\t\t\t\t\tconditions: [{ condition: 'trigger', id: 'brightness_up' }],"
+                },
+                {
+                  "lineNumber": 468,
+                  "content": "\t\t\t\t\t\tsequence: [{ service: 'light.turn_on', target: { entity_id: dashboardEntity.entity_id }, data: { brightness_step_pct: stepPercent } }],"
+                },
+                {
+                  "lineNumber": 471,
+                  "content": "\t\t\t\t\t\tconditions: [{ condition: 'trigger', id: 'brightness_down' }],"
+                },
+                {
+                  "lineNumber": 472,
+                  "content": "\t\t\t\t\t\tsequence: [{ service: 'light.turn_on', target: { entity_id: dashboardEntity.entity_id }, data: { brightness_step_pct: -stepPercent } }],"
+                },
+                {
+                  "lineNumber": 500,
+                  "content": " * Separate automation with mode: restart so brightness_stop can interrupt"
+                },
+                {
+                  "lineNumber": 513,
+                  "content": "\t\t\t{ domain: 'mqtt', device_id: device.device_id, type: 'action', subtype: 'brightness_move_up', trigger: 'device', id: 'brightness_up' },"
+                },
+                {
+                  "lineNumber": 514,
+                  "content": "\t\t\t{ domain: 'mqtt', device_id: device.device_id, type: 'action', subtype: 'brightness_move_down', trigger: 'device', id: 'brightness_down' },"
+                },
+                {
+                  "lineNumber": 515,
+                  "content": "\t\t\t{ domain: 'mqtt', device_id: device.device_id, type: 'action', subtype: 'brightness_stop', trigger: 'device', id: 'brightness_stop' },"
+                },
+                {
+                  "lineNumber": 527,
+                  "content": "\t\t\t\t\tconditions: [{ condition: 'trigger', id: 'brightness_up' }],"
+                },
+                {
+                  "lineNumber": 532,
+                  "content": "\t\t\t\t\t\t\t\t{ service: 'light.turn_on', target: { entity_id: dashboardEntity.entity_id }, data: { brightness_step_pct: stepPercent } },"
+                },
+                {
+                  "lineNumber": 539,
+                  "content": "\t\t\t\t\tconditions: [{ condition: 'trigger', id: 'brightness_down' }],"
+                },
+                {
+                  "lineNumber": 544,
+                  "content": "\t\t\t\t\t\t\t\t{ service: 'light.turn_on', target: { entity_id: dashboardEntity.entity_id }, data: { brightness_step_pct: -stepPercent } },"
+                },
+                {
+                  "lineNumber": 551,
+                  "content": "\t\t\t\t\tconditions: [{ condition: 'trigger', id: 'brightness_stop' }],"
+                },
+                {
+                  "lineNumber": 572,
+                  "content": "\t\t// Generate brightness helper (if power entity + dimmable)"
+                },
+                {
+                  "lineNumber": 573,
+                  "content": "\t\tconst brightnessHelper = generateBrightnessHelper(fixtureId, fixture)"
+                },
+                {
+                  "lineNumber": 574,
+                  "content": "\t\tif (brightnessHelper) inputNumbers = { ...inputNumbers, ...brightnessHelper }"
+                }
+              ]
+            },
+            {
+              "file": "../hass-generator/src/generators/dashboard/templates/bubble/renderer.js",
+              "matches": [
+                {
+                  "lineNumber": 207,
+                  "content": "\tconst { dimmable, brightness_entity, toggle_entity, has_advanced_controls, is_synced_fixture } = light"
+                },
+                {
+                  "lineNumber": 216,
+                  "content": "\t\tentity: brightness_entity,"
+                },
+                {
+                  "lineNumber": 222,
+                  "content": "\tconst toggleAction = brightness_entity !== toggle_entity"
+                },
+                {
+                  "lineNumber": 304,
+                  "content": "\t\t\t\tentity: entity.brightness_entity,"
+                }
+              ]
+            },
+            {
+              "file": "../hass-generator/src/generators/dashboard/templates/bubble-views/renderer.js",
+              "matches": [
+                {
+                  "lineNumber": 327,
+                  "content": "\tconst { dimmable, brightness_entity, toggle_entity, has_advanced_controls, is_synced_fixture } = light"
+                },
+                {
+                  "lineNumber": 336,
+                  "content": "\t\tentity: brightness_entity,"
+                },
+                {
+                  "lineNumber": 341,
+                  "content": "\tconst toggleAction = brightness_entity !== toggle_entity"
+                },
+                {
+                  "lineNumber": 418,
+                  "content": "\t\t\t\tentity: entity.brightness_entity,"
+                }
+              ]
+            },
+            {
+              "file": "../hass-generator/src/generators/dashboard/data.js",
+              "matches": [
+                {
+                  "lineNumber": 233,
+                  "content": "\t\t\treturn controls.includes('brightness')"
+                },
+                {
+                  "lineNumber": 242,
+                  "content": "\t\t\tbrightness_entity: dashboardInfo.entity_id,"
+                },
+                {
+                  "lineNumber": 259,
+                  "content": "\t\t\tresult.push({ entity_id: entityId, name: null, dimmable: false, brightness_entity: entityId, toggle_entity: entityId, has_advanced_controls: false })"
+                },
+                {
+                  "lineNumber": 287,
+                  "content": "\t\tbrightness_entity: companionBulb || entity.entity_id,"
+                }
+              ]
+            },
+            {
+              "file": "../hass-generator/src/generators/area-package.js",
+              "matches": [
+                {
+                  "lineNumber": 70,
+                  "content": "\t// Input numbers for brightness tracking (avoids stale Zigbee values)"
+                }
+              ]
+            }
+          ],
+          "totalLines": 62,
+          "totalMatchedLines": 62
+        }
+      }
+    }
+  }
+}
+```
+Status: **completed**
+
+
+</details>
+</tool-use>
+
+---
+
+
+Checking how the brightness helper is updated and where it's missing:
+
+
+---
+
+<tool-use data-tool-type="read" data-tool-name="read_file_v2">
+<details><summary>Tool use: **read_file_v2** • Read file: /Users/sharonfrenkel/Dev/hass-generator/src/generators/synced-entities.js</summary>
+
+</details>
+</tool-use>
+
+---
+
+<tool-use data-tool-type="read" data-tool-name="read_file_v2">
+<details><summary>Tool use: **read_file_v2** • Read file: /Users/sharonfrenkel/Dev/hass-generator/src/generators/synced-entities.js</summary>
+
+</details>
+</tool-use>
+
+---
+
+<tool-use data-tool-type="unknown" data-tool-name="ripgrep_raw_search">
+<details>
+<summary>Tool use: **ripgrep_raw_search**</summary>
+
+
+Parameters:
+
+```json
+{
+  "pattern": "state_attr.*brightness|brightness.*state",
+  "path": "/Users/sharonfrenkel/Dev/hass-generator/src/generators",
+  "caseInsensitive": true
+}
+```
+Result:
+
+```json
+{
+  "success": {
+    "pattern": "state_attr.*brightness|brightness.*state",
+    "path": "/Users/sharonfrenkel/Dev/hass-generator/src/generators",
+    "outputMode": "content",
+    "workspaceResults": {
+      "/Users/sharonfrenkel/Dev/hass-generator": {
+        "content": {}
+      },
+      "/Users/sharonfrenkel/Dev/hass-config": {
+        "content": {}
+      }
+    }
+  }
+}
+```
+Status: **completed**
+
+
+</details>
+</tool-use>
+
+---
+
+
+The brightness helper is only updated when:
+1. The event throttler script runs (via template light `set_level`)
+2. The template light turns on (resets to default)
+
+It isn't updated when the bulb is controlled directly (KNX, dashboard controlling the bulb entity, etc.). Adding an automation to track brightness changes on the dimmable bulb and update the helper:
+
+
+---
+
+<tool-use data-tool-type="read" data-tool-name="read_file_v2">
+<details><summary>Tool use: **read_file_v2** • Read file: /Users/sharonfrenkel/Dev/hass-generator/src/generators/synced-entities.js</summary>
+
+</details>
+</tool-use>
+
+---
+
+
+Adding an automation to track brightness changes on the dimmable bulb(s) and update the helper. Implementing this:
+
+
+---
+
+<tool-use data-tool-type="read" data-tool-name="read_file_v2">
+<details><summary>Tool use: **read_file_v2** • Read file: /Users/sharonfrenkel/Dev/hass-generator/src/generators/synced-entities.js</summary>
+
+</details>
+</tool-use>
+
+---
+
+<tool-use data-tool-type="read" data-tool-name="read_file_v2">
+<details><summary>Tool use: **read_file_v2** • Read file: /Users/sharonfrenkel/Dev/hass-generator/src/generators/synced-entities.js</summary>
+
+</details>
+</tool-use>
+
+---
+
+
+Adding a function to generate an automation that tracks brightness changes and updates the helper:
+
+
+---
+
+<tool-use data-tool-type="read" data-tool-name="read_file_v2">
+<details><summary>Tool use: **read_file_v2** • Read file: /Users/sharonfrenkel/Dev/hass-generator/src/generators/synced-entities.js</summary>
+
+</details>
+</tool-use>
+
+---
+
+
+Adding a function to generate a brightness tracking automation and integrating it:
+
+
+---
+
+<tool-use data-tool-type="read" data-tool-name="read_file_v2">
+<details><summary>Tool use: **read_file_v2** • Read file: /Users/sharonfrenkel/Dev/hass-generator/src/generators/synced-entities.js</summary>
+
+</details>
+</tool-use>
+
+---
+
+
+Adding the brightness tracking automation:
+
+
+---
+
+<tool-use data-tool-type="read" data-tool-name="read_file_v2">
+<details><summary>Tool use: **read_file_v2** • Read file: /Users/sharonfrenkel/Dev/hass-generator/src/generators/synced-entities.js</summary>
+
+</details>
+</tool-use>
+
+---
+
+
+Adding the brightness tracking automation function:
+
+
+---
+
+<tool-use data-tool-type="read" data-tool-name="read_file_v2">
+<details><summary>Tool use: **read_file_v2** • Read file: /Users/sharonfrenkel/Dev/hass-generator/src/generators/synced-entities.js</summary>
+
+</details>
+</tool-use>
+
+---
+
+
+Adding the brightness tracking automation function:
+
+
+---
+
+<tool-use data-tool-type="read" data-tool-name="read_file_v2">
+<details><summary>Tool use: **read_file_v2** • Read file: /Users/sharonfrenkel/Dev/hass-generator/src/generators/synced-entities.js</summary>
+
+</details>
+</tool-use>
+
+---
+
+
+Adding the brightness tracking automation function:
+
+
+---
+
+<tool-use data-tool-type="read" data-tool-name="read_file_v2">
+<details><summary>Tool use: **read_file_v2** • Read file: /Users/sharonfrenkel/Dev/hass-generator/src/generators/synced-entities.js</summary>
+
+</details>
+</tool-use>
+
+---
+
+
+Adding the brightness tracking automation function and integrating it:
+
+
+---
+
+<tool-use data-tool-type="read" data-tool-name="read_file_v2">
+<details><summary>Tool use: **read_file_v2** • Read file: /Users/sharonfrenkel/Dev/hass-generator/src/generators/synced-entities.js</summary>
+
+</details>
+</tool-use>
+
+---
+
+
+Adding the brightness tracking automation function:
+
+
+---
+
+<tool-use data-tool-type="read" data-tool-name="read_file_v2">
+<details><summary>Tool use: **read_file_v2** • Read file: /Users/sharonfrenkel/Dev/hass-generator/src/generators/synced-entities.js</summary>
+
+</details>
+</tool-use>
+
+---
+
+
+Adding the brightness tracking automation function and integrating it:
+
+
+---
+
+<tool-use data-tool-type="read" data-tool-name="read_file_v2">
+<details><summary>Tool use: **read_file_v2** • Read file: /Users/sharonfrenkel/Dev/hass-generator/src/generators/synced-entities.js</summary>
+
+</details>
+</tool-use>
+
+---
+
+
+Adding the brightness tracking automation function and integrating it:
+
+
+---
+
+<tool-use data-tool-type="read" data-tool-name="read_file_v2">
+<details><summary>Tool use: **read_file_v2** • Read file: /Users/sharonfrenkel/Dev/hass-generator/src/generators/synced-entities.js</summary>
+
+</details>
+</tool-use>
+
+---
+
