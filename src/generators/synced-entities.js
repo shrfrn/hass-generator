@@ -217,6 +217,10 @@ export function generateTemplateLight(fixtureId, fixture) {
 	const controls = primaryDimmable ? resolveControls(primaryDimmable.controls) : ['on', 'off']
 	const hasBrightness = controls.includes('brightness') && primaryDimmable
 
+	function addIconIfSet(light) {
+		if (fixture.icon) light.icon_template = `{{ '${fixture.icon}' }}`
+	}
+
 	if (fixture.power) {
 		// Power-controlled: template coordinates power + bulb/group
 		const templateLight = {
@@ -224,6 +228,7 @@ export function generateTemplateLight(fixtureId, fixture) {
 			value_template: `{{ is_state('${fixture.power}', 'on') }}`,
 			turn_off: { service: 'light.turn_off', target: { entity_id: fixture.power } },
 		}
+		addIconIfSet(templateLight)
 
 		if (hasBrightness) {
 			templateLight.turn_on = [
@@ -287,6 +292,7 @@ export function generateTemplateLight(fixtureId, fixture) {
 		turn_on: { service: 'light.turn_on', target: { entity_id: groupEntityId } },
 		turn_off: { service: 'light.turn_off', target: { entity_id: groupEntityId } },
 	}
+	addIconIfSet(templateLight)
 
 	if (hasBrightness) {
 		templateLight.level_template = `{{ state_attr('${groupEntityId}', 'brightness') | int }}`

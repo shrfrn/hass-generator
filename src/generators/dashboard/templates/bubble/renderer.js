@@ -217,6 +217,7 @@ function buildLightCard(light, t) {
 		name: displayName,
 		scrolling_effect: true,
 	}
+	if (light.icon) card.icon = light.icon
 
 	// Build the toggle action (homeassistant.toggle works on any domain)
 	const toggleAction = brightness_entity !== toggle_entity

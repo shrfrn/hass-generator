@@ -155,6 +155,14 @@ describe('dashboard/data.js', () => {
 			expect(fixture.dimmable).toBe(true)
 			expect(fixture.is_synced_fixture).toBe(true)
 		})
+
+		test('synced fixture with icon passes icon to light entry', () => {
+			const result = prepareAllAreaData(minimalInventory, dashboardConfig, generatorConfig)
+			const bedroom = result.find(r => r.area.id === 'bedroom')
+			const fixture = bedroom.lights.find(l => l.entity_id === 'light.mb_standing_lamp')
+
+			expect(fixture.icon).toBe('mdi:wall-sconce-round')
+		})
 	})
 
 	describe('enrichWithDimming', () => {

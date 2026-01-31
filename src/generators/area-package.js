@@ -88,10 +88,6 @@ function buildLightGroup({ area, entities, areaConfig, globalConfig }) {
 	const excludeList = areaConfig.exclude_from_group || []
 	const excludeSet = new Set(excludeList)
 
-	// Companion bulbs are controlled via their actuator - exclude from group (legacy)
-	const dimmableCompanions = areaConfig.dimmable_companions || {}
-	const companionBulbs = new Set(Object.values(dimmableCompanions))
-
 	// Synced entities: exclude raw bulbs and internal _group so area group lists template only
 	const syncedEntityIds = areaConfig.syncedEntities ? getSyncedEntityIds(areaConfig.syncedEntities) : new Set()
 	const generatedGroupIds = new Set(getGeneratedGroupEntityIds(areaConfig.syncedEntities))
@@ -107,7 +103,6 @@ function buildLightGroup({ area, entities, areaConfig, globalConfig }) {
 	// Get lights from this area (domain: light only)
 	const areaLights = entities
 		.filter(e => e.area_id === area.id && e.domain === 'light')
-		.filter(e => !companionBulbs.has(e.entity_id))
 		.filter(e => !syncedEntityIds.has(e.entity_id))
 		.filter(e => !generatedGroupIds.has(e.entity_id))
 		.filter(e => {

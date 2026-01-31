@@ -102,6 +102,7 @@ Configure fixtures where multiple entities should sync together (e.g., KNX wall 
 syncedEntities: {
   fixture_id: {
     name: 'Fixture Display Name',
+    icon: 'mdi:wall-sconce-round',  // Optional: override HA default icon
     power: 'light.power_entity',  // or null if always powered
     default_brightness: 254,       // Optional: hardware power-on default (default: 255)
     entities: [
@@ -123,6 +124,7 @@ syncedEntities: {
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|
 | `name` | `string` | required | Display name for the fixture |
+| `icon` | `string` | — | Optional MDI icon (e.g. `'mdi:wall-sconce-round'`). Applied to the generated template light and dashboard card; if omitted, HA default is used. |
 | `power` | `string \| null` | required | Power control entity. `null` = always on, entity_id = generates template light with boot-wait |
 | `default_brightness` | `number` | `254` | Hardware power-on brightness. Used for input_number initial value and turn_on reset. |
 | `entities` | `SyncedEntity[]` | required | Entities in this fixture |
@@ -1025,6 +1027,7 @@ const config = {
       syncedEntities: {
         fixture_id: {
           name: 'Fixture Name',
+          icon: 'mdi:wall-sconce-round',  // optional
           power: null,  // or 'light.power_relay'
           entities: [
             { entity_id: 'switch.actuator', sync: true },

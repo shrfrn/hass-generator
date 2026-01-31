@@ -91,6 +91,12 @@ export interface SyncedFixture {
 	name: string
 
 	/**
+	 * Optional MDI icon for the fixture (e.g. 'mdi:wall-sconce-round').
+	 * Applied to the generated template light and dashboard card; if omitted, HA default is used.
+	 */
+	icon?: string
+
+	/**
 	 * Power control entity ID, or null if always powered.
 	 * - If set: generates a template light with boot-wait logic
 	 * - If null + multiple dimmables: generates a light group
@@ -131,18 +137,8 @@ export interface AreaConfig {
   included_labels?: string[]
 
   /**
-   * Maps on/off actuators to their companion dimmable bulbs.
-   * The actuator controls power, the bulb controls brightness.
-   * Companion bulbs are auto-excluded from light groups and dashboard lists.
-   * @deprecated Use syncedEntities instead for more control
-   * @example { 'switch.mb_soc': 'light.mb_soc_bulb' }
-   */
-  dimmable_companions?: Record<string, string>
-
-  /**
    * Synced entity fixtures for this area.
    * Generates sync automations, template lights, and/or light groups.
-   * Replaces dimmable_companions with more granular control.
    * @example
    * {
    *   mb_standing_lamp: {

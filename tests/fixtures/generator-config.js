@@ -17,6 +17,7 @@ export default {
 			syncedEntities: {
 				mb_standing_lamp: {
 					name: 'Master Bedroom Standing Lamp',
+					icon: 'mdi:wall-sconce-round',
 					power: null,
 					entities: [
 						{ entity_id: 'switch.mb_soc', sync: true },
