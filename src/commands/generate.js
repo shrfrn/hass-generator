@@ -7,6 +7,7 @@ import { ensureDir } from '../utils/fs.js'
 import { generateAreaPackages } from '../generators/area-package.js'
 import { generateLabelPackages } from '../generators/label-package.js'
 import { generateHomePackage } from '../generators/home-package.js'
+import { generateAutomations } from '../generators/automations-generated.js'
 import { generateSceneTemplates } from '../generators/scene-template-package.js'
 import { generateUsersFile } from '../generators/users-package.js'
 import { generateDashboard } from '../generators/dashboard/index.js'
@@ -90,6 +91,8 @@ async function generateYamlPackages(inventory, config) {
 
 	const homeFiles = await generateHomePackage(inventory, paths.packages())
 	files.push(...homeFiles)
+
+	await generateAutomations()
 
 	// Scene templates (not included in index.yaml - for manual use only)
 	await generateSceneTemplates(inventory, config, paths.packages())
