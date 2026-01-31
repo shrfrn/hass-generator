@@ -173,13 +173,20 @@ All generated automations and scripts receive two labels:
 
 **What Gets Generated:**
 
-| `power` | dimmables | Generated |
-|---------|-----------|-----------|
-| entity_id | any | Template light + input_number helper + event throttler script + sync automation |
-| null | 1 | Sync automation only (bulb used directly) |
-| null | 2+ | Light group + sync automation |
+| `power` | light entities | Generated |
+|---------|----------------|-----------|
+| entity_id | any | Template light + light group + input_number helper + event throttler script + sync automation |
+| null | any | Template light + light group + sync automation |
 
-**When `power` is set with dimmable entities, the generator creates:**
+**For all fixtures, the generator creates:**
+
+1. **`light.{fixture_id}_group`** - Light group containing all light entities in the fixture. Always created, even for single bulbs. The sync automation triggers on this group (not individual bulbs) to prevent race conditions.
+
+2. **`light.{fixture_id}` (template light)** - Wrapper that targets the group. Provides a consistent entity ID for scenes/automations/dashboards.
+
+3. **Sync automation** (`{fixture_id}_sync`) - Keeps the group and non-light entities (switches) in sync. Uses `mode: restart` for responsiveness and filters targets by state to avoid redundant commands.
+
+**When `power` is set with dimmable entities, the generator additionally creates:**
 
 1. **`input_number.{fixture_id}_brightness`** - Tracks brightness internally to avoid stale values from Zigbee bulbs after power cycles. Initial value: `default_brightness` (default: 254).
 
@@ -188,7 +195,7 @@ All generated automations and scripts receive two labels:
    - Send brightness to bulbs
    - Update the input_number helper
 
-3. **Template light** - Uses the helper for `level_template` (not the bulb's potentially stale brightness). The `turn_on` action resets the helper to `default_brightness`. The `set_level` action routes through the event throttler script.
+3. **Template light enhancements** - Uses the helper for `level_template` (not the bulb's potentially stale brightness). The `turn_on` action resets the helper to `default_brightness`. The `set_level` action routes through the event throttler script.
 
 > **Note:** Configure Z2M power-on brightness to match your `default_brightness` value for consistent behavior.
 

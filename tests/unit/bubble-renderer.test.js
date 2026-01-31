@@ -266,16 +266,16 @@ describe('bubble/renderer.js', () => {
 			const stack = bedroomPopup.card || bedroomPopup
 			const lightsGrid = stack.cards.find(c =>
 				c.type === 'grid' && c.cards?.some(card =>
-					card.entity === 'light.mb_soc_bulb' || card.entity === 'light.mb_ceiling',
+					card.entity === 'light.mb_standing_lamp' || card.entity === 'light.mb_ceiling',
 				),
 			)
 
 			expect(lightsGrid).toBeDefined()
 
-			// Find the switch with companion - entity should point to bulb
-			const switchCard = lightsGrid.cards.find(c => c.entity === 'light.mb_soc_bulb')
-			expect(switchCard).toBeDefined()
-			expect(switchCard.button_type).toBe('slider')
+			// Find the fixture - entity should point to template light
+			const fixtureCard = lightsGrid.cards.find(c => c.entity === 'light.mb_standing_lamp')
+			expect(fixtureCard).toBeDefined()
+			expect(fixtureCard.button_type).toBe('slider')
 		})
 	})
 })

@@ -1014,3 +1014,1145 @@ Directory: **/Users/sharonfrenkel/Dev/hass-generator** (0 file)
 
 ---
 
+<think><details><summary>Thought Process</summary>
+There are no dedicated tests for synced entities, but I should check what tests exist that might be affected by this change.</details></think>
+
+---
+
+<tool-use data-tool-type="unknown" data-tool-name="ripgrep_raw_search">
+<details>
+<summary>Tool use: **ripgrep_raw_search**</summary>
+
+
+Parameters:
+
+```json
+{
+  "pattern": "syncedEntities|SyncedFixture|generateLightGroup|generateTemplateLight",
+  "path": "/Users/sharonfrenkel/Dev/hass-generator/tests",
+  "outputMode": "files_with_matches",
+  "caseInsensitive": false
+}
+```
+Result:
+
+```json
+{
+  "success": {
+    "pattern": "syncedEntities|SyncedFixture|generateLightGroup|generateTemplateLight",
+    "path": "/Users/sharonfrenkel/Dev/hass-generator/tests",
+    "outputMode": "files_with_matches",
+    "workspaceResults": {
+      "/Users/sharonfrenkel/Dev/hass-generator": {
+        "files": {
+          "files": [
+            "tests/unit/area-package.test.js",
+            "tests/fixtures/generator-config.js"
+          ],
+          "totalFiles": 2
+        }
+      },
+      "/Users/sharonfrenkel/Dev/hass-config": {
+        "files": {
+          "files": [
+            "../hass-generator/tests/unit/area-package.test.js",
+            "../hass-generator/tests/fixtures/generator-config.js"
+          ],
+          "totalFiles": 2
+        }
+      }
+    }
+  }
+}
+```
+Status: **completed**
+
+
+</details>
+</tool-use>
+
+---
+
+<tool-use data-tool-type="read" data-tool-name="read_file_v2">
+<details><summary>Tool use: **read_file_v2** • Read file: /Users/sharonfrenkel/Dev/hass-generator/CONFIG_OPTIONS.md</summary>
+
+</details>
+</tool-use>
+
+---
+
+<think><details><summary>Thought Process</summary>
+Now I have a complete picture. Let me read the relevant test files to understand what tests might need updating.</details></think>
+
+---
+
+<tool-use data-tool-type="read" data-tool-name="read_file_v2">
+<details><summary>Tool use: **read_file_v2** • Read file: /Users/sharonfrenkel/Dev/hass-generator/tests/unit/area-package.test.js</summary>
+
+</details>
+</tool-use>
+
+---
+
+<tool-use data-tool-type="read" data-tool-name="read_file_v2">
+<details><summary>Tool use: **read_file_v2** • Read file: /Users/sharonfrenkel/Dev/hass-generator/tests/fixtures/generator-config.js</summary>
+
+</details>
+</tool-use>
+
+---
+
+<think><details><summary>Thought Process</summary>
+Now I have a complete picture. Let me also check the `getGeneratedGroupEntityIds` function since it's relevant to the refactor - it currently returns groups only for fixtures with 2+ dimmables and no power.</details></think>
+
+---
+
+I have all the context needed. Let me create a comprehensive plan for this refactor.
+
+---
+
+<tool-use data-tool-type="unknown" data-tool-name="create_plan">
+<details>
+<summary>Tool use: **create_plan**</summary>
+
+
+Parameters:
+
+```json
+{
+  "plan": "# Synced Entities Loop Prevention Refactor\n\n## Problem Summary\n\nRapid commands cause an endless toggle loop because:\n1. Individual bulbs are synced separately, causing simultaneous triggers\n2. No debounce or state filtering on targets\n3. Race conditions when multiple entities report state changes at once\n\n## Architecture Change\n\n&#96;&#96;&#96;mermaid\nflowchart TB\n    subgraph current [Current: Sync Individual Bulbs]\n        direction TB\n        R1[Remote] --&gt;|turn_on| G1[Group]\n        G1 --&gt; B1A[Bulb A on]\n        G1 --&gt; B1B[Bulb B on]\n        B1A --&gt;|trigger sync| S1[Sync Auto]\n        B1B --&gt;|trigger sync| S1\n        S1 --&gt;|turn_on bulb B, switch| LOOP1[Race Condition Loop]\n    end\n    \n    subgraph new [New: Sync Group Only]\n        direction TB\n        R2[Remote] --&gt;|turn_on| G2[Group]\n        G2 --&gt; B2A[Bulb A on]\n        G2 --&gt; B2B[Bulb B on]\n        G2 --&gt;|single trigger| S2[Sync Auto]\n        S2 --&gt;|turn_on switch| SW2[Switch]\n        SW2 --&gt;|trigger| S2\n        S2 --&gt;|group already on| STOP[No-op, chain stops]\n    end\n&#96;&#96;&#96;\n\n## Changes to [synced-entities.js](src/generators/synced-entities.js)\n\n### 1. Always Create Light Group (even for single bulb)\n\nModify &#96;generateLightGroup&#96; (lines 327-347):\n\n&#96;&#96;&#96;javascript\n// BEFORE: Only creates group when power is null AND multiple dimmables\nexport function generateLightGroup(fixtureId, fixture) {\n    if (fixture.power) return null\n    const dimmables = getDimmableEntities(fixture)\n    if (dimmables.length &lt;= 1) return null\n    // ...\n}\n\n// AFTER: Always create group for entities with entity_id\nexport function generateLightGroup(fixtureId, fixture) {\n    const lightEntities = fixture.entities.filter(e =&gt; \n        'entity_id' in e &amp;&amp; e.entity_id.startsWith('light.')\n    )\n    if (lightEntities.length === 0) return null\n    // Create group even for single bulb\n    return [{\n        platform: 'group',\n        name: &#96;${fixtureId}_group&#96;,\n        unique_id: &#96;${fixtureId}_group&#96;,\n        entities: lightEntities.map(e =&gt; e.entity_id),\n    }]\n}\n&#96;&#96;&#96;\n\n### 2. Template Light Always Wraps Group\n\nModify &#96;getUnderlyingLightTarget&#96; (lines 193-211):\n\n&#96;&#96;&#96;javascript\n// AFTER: Always return the group entity\nfunction getUnderlyingLightTarget(fixtureId, fixture) {\n    return &#96;light.${fixtureId}_group&#96;\n}\n&#96;&#96;&#96;\n\nUpdate &#96;generateTemplateLight&#96; (lines 222-325) to use the group in the no-power case:\n\n&#96;&#96;&#96;javascript\n// No power: wrapper template, pass-through to group\nconst underlying = &#96;light.${fixtureId}_group&#96;\n&#96;&#96;&#96;\n\n### 3. Sync the Group, Not Individual Bulbs\n\nModify &#96;generateSyncAutomation&#96; (lines 385-509):\n\nAdd new helper to get the group entity ID for sync:\n\n&#96;&#96;&#96;javascript\nfunction getGroupEntityId(fixtureId) {\n    return &#96;light.${fixtureId}_group&#96;\n}\n&#96;&#96;&#96;\n\nIn the sync automation triggers, replace individual bulbs with the group:\n\n&#96;&#96;&#96;javascript\n// BEFORE: entityIds from getSyncEntities (includes all sync:true entities)\nconst entityIds = syncEntities.map(e =&gt; e.entity_id)\n\n// AFTER: Separate lights (use group) from non-lights (use directly)\nconst groupEntityId = &#96;light.${fixtureId}_group&#96;\nconst nonLightSyncEntities = syncEntities.filter(e =&gt; !e.entity_id.startsWith('light.'))\nconst syncTriggerIds = [groupEntityId, ...nonLightSyncEntities.map(e =&gt; e.entity_id)]\n&#96;&#96;&#96;\n\n### 4. Add &#96;mode: restart&#96; to Sync Automation\n\nIn &#96;generateSyncAutomation&#96;, add mode to the automation object:\n\n&#96;&#96;&#96;javascript\nautomations.push({\n    id: &#96;${fixtureId}_sync&#96;,\n    alias: &#96;${fixture.name} Sync&#96;,\n    mode: 'restart',  // NEW: Cancel current execution on new trigger\n    trigger: triggers,\n    action: [{ choose: choices }],\n})\n&#96;&#96;&#96;\n\n### 5. Add Target State Filter\n\nModify the sync action to filter out entities already in the target state:\n\n&#96;&#96;&#96;javascript\n// BEFORE\nsequence: [{\n    service: 'homeassistant.turn_{{ trigger.to_state.state }}',\n    target: {\n        entity_id: &#96;{% set triggered = trigger.entity_id %}\n{% set all = ${JSON.stringify(entityIds)} %}\n{{ all | reject('eq', triggered) | list }}&#96;,\n    },\n}]\n\n// AFTER: Filter out entities already in target state\nsequence: [{\n    service: 'homeassistant.turn_{{ trigger.to_state.state }}',\n    target: {\n        entity_id: &#96;{% set triggered = trigger.entity_id %}\n{% set target_state = trigger.to_state.state %}\n{% set all = ${JSON.stringify(syncTriggerIds)} %}\n{{ all | reject('eq', triggered) | reject('is_state', target_state) | list }}&#96;,\n    },\n}]\n&#96;&#96;&#96;\n\n### 6. Update Helper Functions\n\nUpdate &#96;getGeneratedGroupEntityIds&#96; (lines 633-643):\n\n&#96;&#96;&#96;javascript\n// AFTER: Groups are always generated, return all fixture group IDs\nexport function getGeneratedGroupEntityIds(syncedEntities) {\n    const ids = []\n    for (const fixtureId of Object.keys(syncedEntities || {})) {\n        ids.push(&#96;light.${fixtureId}_group&#96;)\n    }\n    return ids\n}\n&#96;&#96;&#96;\n\n## Files to Update\n\n| File | Changes |\n|------|---------|\n| [src/generators/synced-entities.js](src/generators/synced-entities.js) | Core logic changes |\n| [tests/unit/area-package.test.js](tests/unit/area-package.test.js) | Update tests for new group behavior |\n| [tests/fixtures/generator-config.js](tests/fixtures/generator-config.js) | May need test fixture updates |\n| [CONFIG_OPTIONS.md](CONFIG_OPTIONS.md) | Update \"What Gets Generated\" table |\n\n## Test Updates Required\n\nUpdate existing tests in &#96;area-package.test.js&#96;:\n\n1. Test that groups are always created (even single bulb)\n2. Test that sync automation triggers on group, not individual bulbs\n3. Test that &#96;mode: restart&#96; is present\n4. Test that target state filter is in the automation YAML\n\n## Expected Generated Output\n\nFor the &#96;mwc_bathroom_wall_lights&#96; fixture:\n\n&#96;&#96;&#96;yaml\nlight:\n  - platform: group\n    name: mwc_bathroom_wall_lights_group\n    unique_id: mwc_bathroom_wall_lights_group\n    entities:\n      - light.mwc_bathroom_east_wall_ikea_bulb\n      - light.mwc_bathroom_south_wall_ikea_bulb\n\n  - platform: template\n    lights:\n      mwc_bathroom_wall_lights:\n        friendly_name: Bathroom Wall Lights\n        value_template: \"{{ is_state('light.mwc_bathroom_wall_lights_group', 'on') }}\"\n        turn_on:\n          service: light.turn_on\n          target:\n            entity_id: light.mwc_bathroom_wall_lights_group\n        turn_off:\n          service: light.turn_off\n          target:\n            entity_id: light.mwc_bathroom_wall_lights_group\n\nautomation:\n  - id: mwc_bathroom_wall_lights_sync\n    alias: Bathroom Wall Lights Sync\n    mode: restart\n    trigger:\n      - platform: state\n        entity_id:\n          - light.mwc_bathroom_wall_lights_group\n          - switch.mwc_sw_bathroom_wall_e\n        to: [\"on\", \"off\"]\n        id: entity_sync\n    action:\n      - choose:\n          - conditions:\n              - condition: trigger\n                id: entity_sync\n              - condition: template\n                value_template: \"{{ trigger.to_state.state != trigger.from_state.state }}\"\n            sequence:\n              - service: \"homeassistant.turn_{{ trigger.to_state.state }}\"\n                target:\n                  entity_id: &gt;\n                    {% set triggered = trigger.entity_id %}\n                    {% set target_state = trigger.to_state.state %}\n                    {% set all = [\"light.mwc_bathroom_wall_lights_group\",\"switch.mwc_sw_bathroom_wall_e\"] %}\n                    {{ all | reject('eq', triggered) | reject('is_state', target_state) | list }}\n&#96;&#96;&#96;\n",
+  "name": "Synced Entities Refactor",
+  "todos": [
+    {
+      "content": "Modify generateLightGroup to always create group (even single bulb)",
+      "status": "pending",
+      "id": "group-always"
+    },
+    {
+      "content": "Update generateTemplateLight and getUnderlyingLightTarget to always wrap the group",
+      "status": "pending",
+      "id": "template-wrap-group"
+    },
+    {
+      "content": "Update generateSyncAutomation to trigger on group instead of individual bulbs",
+      "status": "pending",
+      "id": "sync-group-trigger"
+    },
+    {
+      "content": "Add mode: restart to sync automation",
+      "status": "pending",
+      "id": "mode-restart"
+    },
+    {
+      "content": "Add target state filter to prevent redundant commands",
+      "status": "pending",
+      "id": "state-filter"
+    },
+    {
+      "content": "Update getGeneratedGroupEntityIds and related helper functions",
+      "status": "pending",
+      "id": "update-helpers"
+    },
+    {
+      "content": "Update area-package.test.js tests for new behavior",
+      "status": "pending",
+      "id": "update-tests"
+    },
+    {
+      "content": "Update CONFIG_OPTIONS.md \"What Gets Generated\" table",
+      "status": "pending",
+      "id": "update-docs"
+    }
+  ],
+  "overview": "Refactor synced entities to always create groups and template lights, sync via the group (not individual bulbs), and add loop prevention with mode:restart and target state filtering."
+}
+```
+Additional data:
+
+```json
+{
+  "reviewData": {
+    "status": "Requested",
+    "selectedOption": "none",
+    "isShowingInput": false
+  },
+  "planUri": "file:///Users/sharonfrenkel/.cursor/plans/synced_entities_refactor_de7f89f1.plan.md",
+  "hasOpenedEditor": true
+}
+```
+Result:
+
+```json
+{
+  "rejected": {}
+}
+```
+Status: **completed**
+
+
+</details>
+</tool-use>
+
+---
+
+_**User**_
+
+Implement the plan as specified, it is attached for your reference. Do NOT edit the plan file itself.
+
+To-do's from the plan have already been created. Do not create them again. Mark them as in_progress as you work, starting with the first one. Don't stop until you have completed all the to-dos.
+
+---
+
+_**Agent (model claude-4.5-opus-high-thinking, mode Agent)**_
+
+<think><details><summary>Thought Process</summary>
+The user wants me to implement the plan for the synced entities refactor. Let me start by marking the first todo as in_progress and begin implementing the changes.
+
+The plan outlines these changes:
+1. Modify generateLightGroup to always create group (even single bulb)
+2. Update generateTemplateLight and getUnderlyingLightTarget to always wrap the group
+3. Update generateSyncAutomation to trigger on group instead of individual bulbs
+4. Add mode: restart to sync automation
+5. Add target state filter to prevent redundant commands
+6. Update getGeneratedGroupEntityIds and related helper functions
+7. Update area-package.test.js tests for new behavior
+8. Update CONFIG_OPTIONS.md "What Gets Generated" table
+
+Let me start with the first todo - modifying generateLightGroup.</details></think>
+
+---
+
+📗 I'll implement the plan step by step. Let me start with the first todo.
+
+---
+
+<tool-use data-tool-type="task" data-tool-name="todo_write">
+<details><summary>Tool use: **todo_write** • Todo List</summary>
+
+- [-] Modify generateLightGroup to always create group (even single bulb)
+- [ ] Update generateTemplateLight and getUnderlyingLightTarget to always wrap the group
+- [ ] Update generateSyncAutomation to trigger on group instead of individual bulbs
+- [ ] Add mode: restart to sync automation
+- [ ] Add target state filter to prevent redundant commands
+- [ ] Update getGeneratedGroupEntityIds and related helper functions
+- [ ] Update area-package.test.js tests for new behavior
+- [ ] Update CONFIG_OPTIONS.md "What Gets Generated" table
+
+</details>
+</tool-use>
+
+---
+
+<tool-use data-tool-type="read" data-tool-name="read_file_v2">
+<details><summary>Tool use: **read_file_v2** • Read file: /Users/sharonfrenkel/Dev/hass-generator/src/generators/synced-entities.js</summary>
+
+</details>
+</tool-use>
+
+---
+
+<think><details><summary>Thought Process</summary>
+Now I need to modify `generateLightGroup` to always create a group, even for single bulb fixtures. The new logic should:
+1. Get all light entities (entities with entity_id starting with 'light.')
+2. If there are no light entities, return null
+3. Otherwise, create a group with all light entities
+
+Let me make this change.</details></think>
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="edit_file_v2">
+
+<details><summary>Tool use: **edit_file_v2** • Edit file: /Users/sharonfrenkel/Dev/hass-generator/src/generators/synced-entities.js</summary>
+
+</details>
+
+</tool-use>
+
+---
+
+<think><details><summary>Thought Process</summary>
+Good, I've updated `generateLightGroup`. Now let me mark the first todo as completed and move to the second one - updating `generateTemplateLight` and `getUnderlyingLightTarget` to always wrap the group.</details></think>
+
+---
+
+<tool-use data-tool-type="task" data-tool-name="todo_write">
+<details><summary>Tool use: **todo_write** • Todo List</summary>
+
+- [x] Modify generateLightGroup to always create group (even single bulb)
+- [-] Update generateTemplateLight and getUnderlyingLightTarget to always wrap the group
+- [ ] Update generateSyncAutomation to trigger on group instead of individual bulbs
+- [ ] Add mode: restart to sync automation
+- [ ] Add target state filter to prevent redundant commands
+- [ ] Update getGeneratedGroupEntityIds and related helper functions
+- [ ] Update area-package.test.js tests for new behavior
+- [ ] Update CONFIG_OPTIONS.md "What Gets Generated" table
+
+</details>
+</tool-use>
+
+---
+
+<tool-use data-tool-type="read" data-tool-name="read_file_v2">
+<details><summary>Tool use: **read_file_v2** • Read file: /Users/sharonfrenkel/Dev/hass-generator/src/generators/synced-entities.js</summary>
+
+</details>
+</tool-use>
+
+---
+
+<think><details><summary>Thought Process</summary>
+Now I need to update `getUnderlyingLightTarget` to always return the group entity. The function is used in the no-power case of `generateTemplateLight`. Let me update both functions.
+
+The changes needed:
+1. `getUnderlyingLightTarget` should always return the group entity ID (`light.${fixtureId}_group`) when there are light entities
+2. The no-power case in `generateTemplateLight` should use the group as the underlying target
+
+Let me update these functions.</details></think>
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="edit_file_v2">
+
+<details><summary>Tool use: **edit_file_v2** • Edit file: /Users/sharonfrenkel/Dev/hass-generator/src/generators/synced-entities.js</summary>
+
+</details>
+
+</tool-use>
+
+---
+
+<think><details><summary>Thought Process</summary>
+Good, now I need to update the `generateTemplateLight` function. The no-power case now needs to use the group as the underlying target. Let me read the current state of that function and update it.</details></think>
+
+---
+
+<tool-use data-tool-type="read" data-tool-name="read_file_v2">
+<details><summary>Tool use: **read_file_v2** • Read file: /Users/sharonfrenkel/Dev/hass-generator/src/generators/synced-entities.js</summary>
+
+</details>
+</tool-use>
+
+---
+
+<think><details><summary>Thought Process</summary>
+Now I need to simplify the no-power case in `generateTemplateLight`. Since `getUnderlyingLightTarget` now always returns a string (the group entity), I can simplify the code that uses it. The `Array.isArray` checks are no longer needed.</details></think>
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="edit_file_v2">
+
+<details><summary>Tool use: **edit_file_v2** • Edit file: /Users/sharonfrenkel/Dev/hass-generator/src/generators/synced-entities.js</summary>
+
+</details>
+
+</tool-use>
+
+---
+
+<think><details><summary>Thought Process</summary>
+Good, now let me mark the second todo as completed and move to the third one - updating `generateSyncAutomation` to trigger on group instead of individual bulbs.</details></think>
+
+---
+
+<tool-use data-tool-type="task" data-tool-name="todo_write">
+<details><summary>Tool use: **todo_write** • Todo List</summary>
+
+- [x] Modify generateLightGroup to always create group (even single bulb)
+- [x] Update generateTemplateLight and getUnderlyingLightTarget to always wrap the group
+- [-] Update generateSyncAutomation to trigger on group instead of individual bulbs
+- [ ] Add mode: restart to sync automation
+- [ ] Add target state filter to prevent redundant commands
+- [ ] Update getGeneratedGroupEntityIds and related helper functions
+- [ ] Update area-package.test.js tests for new behavior
+- [ ] Update CONFIG_OPTIONS.md "What Gets Generated" table
+
+</details>
+</tool-use>
+
+---
+
+<tool-use data-tool-type="read" data-tool-name="read_file_v2">
+<details><summary>Tool use: **read_file_v2** • Read file: /Users/sharonfrenkel/Dev/hass-generator/src/generators/synced-entities.js</summary>
+
+</details>
+</tool-use>
+
+---
+
+<think><details><summary>Thought Process</summary>
+Now I need to update `generateSyncAutomation` to:
+1. Trigger on the group entity instead of individual bulb entities
+2. Keep non-light entities (like switches) as sync triggers
+
+The key change is in the `hasSyncEntities` block (lines 414-437). Instead of using all `syncEntities` entity IDs, I need to:
+1. Get the group entity ID
+2. Get non-light sync entities (e.g., switches)
+3. Combine them for the sync trigger list
+
+Let me make this change. I'll also handle the next todos (mode: restart and state filter) in subsequent changes.</details></think>
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="edit_file_v2">
+
+<details><summary>Tool use: **edit_file_v2** • Edit file: /Users/sharonfrenkel/Dev/hass-generator/src/generators/synced-entities.js</summary>
+
+</details>
+
+</tool-use>
+
+---
+
+<think><details><summary>Thought Process</summary>
+I've updated the sync automation to:1. Use the group entity instead of individual bulb entities (todo 3)
+2. Added the state filter to only target entities not already in the target state (todo 5)
+
+Now let me mark todo 3 and 5 as completed, and work on todo 4 (adding mode: restart).</details></think>
+
+---
+
+<tool-use data-tool-type="task" data-tool-name="todo_write">
+<details><summary>Tool use: **todo_write** • Todo List</summary>
+
+- [x] Modify generateLightGroup to always create group (even single bulb)
+- [x] Update generateTemplateLight and getUnderlyingLightTarget to always wrap the group
+- [x] Update generateSyncAutomation to trigger on group instead of individual bulbs
+- [-] Add mode: restart to sync automation
+- [x] Add target state filter to prevent redundant commands
+- [ ] Update getGeneratedGroupEntityIds and related helper functions
+- [ ] Update area-package.test.js tests for new behavior
+- [ ] Update CONFIG_OPTIONS.md "What Gets Generated" table
+
+</details>
+</tool-use>
+
+---
+
+<tool-use data-tool-type="read" data-tool-name="read_file_v2">
+<details><summary>Tool use: **read_file_v2** • Read file: /Users/sharonfrenkel/Dev/hass-generator/src/generators/synced-entities.js</summary>
+
+</details>
+</tool-use>
+
+---
+
+<think><details><summary>Thought Process</summary>
+Now I need to add `mode: 'restart'` to the sync automation object. Let me update it.</details></think>
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="edit_file_v2">
+
+<details><summary>Tool use: **edit_file_v2** • Edit file: /Users/sharonfrenkel/Dev/hass-generator/src/generators/synced-entities.js</summary>
+
+</details>
+
+</tool-use>
+
+---
+
+<think><details><summary>Thought Process</summary>
+Now let me mark the mode-restart todo as completed and work on updating the helper functions.</details></think>
+
+---
+
+<tool-use data-tool-type="task" data-tool-name="todo_write">
+<details><summary>Tool use: **todo_write** • Todo List</summary>
+
+- [x] Modify generateLightGroup to always create group (even single bulb)
+- [x] Update generateTemplateLight and getUnderlyingLightTarget to always wrap the group
+- [x] Update generateSyncAutomation to trigger on group instead of individual bulbs
+- [x] Add mode: restart to sync automation
+- [x] Add target state filter to prevent redundant commands
+- [-] Update getGeneratedGroupEntityIds and related helper functions
+- [ ] Update area-package.test.js tests for new behavior
+- [ ] Update CONFIG_OPTIONS.md "What Gets Generated" table
+
+</details>
+</tool-use>
+
+---
+
+<tool-use data-tool-type="read" data-tool-name="read_file_v2">
+<details><summary>Tool use: **read_file_v2** • Read file: /Users/sharonfrenkel/Dev/hass-generator/src/generators/synced-entities.js</summary>
+
+</details>
+</tool-use>
+
+---
+
+<think><details><summary>Thought Process</summary>
+Now I need to update `getGeneratedGroupEntityIds`. Since groups are now always generated (when there are light entities), I need to simplify this function. The old logic checked for `power` and `dimmables.length >= 2`, but now groups are always created.Let me update this function to return all fixture group IDs where there are light entities.</details></think>
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="edit_file_v2">
+
+<details><summary>Tool use: **edit_file_v2** • Edit file: /Users/sharonfrenkel/Dev/hass-generator/src/generators/synced-entities.js</summary>
+
+</details>
+
+</tool-use>
+
+---
+
+<think><details><summary>Thought Process</summary>
+Now let me check if there are any other helper functions that need updating, and then check for linter errors.</details></think>
+
+---
+
+<tool-use data-tool-type="unknown" data-tool-name="read_lints">
+<details>
+<summary>Tool use: **read_lints**</summary>
+
+
+Parameters:
+
+```json
+{
+  "paths": [
+    "/Users/sharonfrenkel/Dev/hass-generator/src/generators/synced-entities.js"
+  ]
+}
+```
+Result:
+
+```json
+{
+  "linterErrorsByFile": [
+    {
+      "relativeWorkspacePath": "/Users/sharonfrenkel/Dev/hass-generator/src/generators/synced-entities.js"
+    }
+  ]
+}
+```
+Status: **completed**
+
+
+</details>
+</tool-use>
+
+---
+
+<think><details><summary>Thought Process</summary>
+Good, no linter errors. Let me mark the helper update as complete and move to updating the tests.</details></think>
+
+---
+
+<tool-use data-tool-type="task" data-tool-name="todo_write">
+<details><summary>Tool use: **todo_write** • Todo List</summary>
+
+- [x] Modify generateLightGroup to always create group (even single bulb)
+- [x] Update generateTemplateLight and getUnderlyingLightTarget to always wrap the group
+- [x] Update generateSyncAutomation to trigger on group instead of individual bulbs
+- [x] Add mode: restart to sync automation
+- [x] Add target state filter to prevent redundant commands
+- [x] Update getGeneratedGroupEntityIds and related helper functions
+- [-] Update area-package.test.js tests for new behavior
+- [ ] Update CONFIG_OPTIONS.md "What Gets Generated" table
+
+</details>
+</tool-use>
+
+---
+
+<tool-use data-tool-type="read" data-tool-name="read_file_v2">
+<details><summary>Tool use: **read_file_v2** • Read file: /Users/sharonfrenkel/Dev/hass-generator/tests/unit/area-package.test.js</summary>
+
+</details>
+</tool-use>
+
+---
+
+<think><details><summary>Thought Process</summary>
+I need to update the tests to reflect the new behavior:
+1. Test that groups are always created (even for single bulb)2. Test that sync automation triggers on group, not individual bulbs
+3. Test that `mode: restart` is present in sync automation
+4. Test that target state filter is in the automation YAMLLet me first look at the test that checks for sync automation naming (line 188-196) since it currently expects `light.mb_soc_bulb` to be in the sync automation. With the new behavior, it should be `light.mb_standing_lamp_group` instead.Let me update the relevant tests.</details></think>
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="edit_file_v2">
+
+<details><summary>Tool use: **edit_file_v2** • Edit file: /Users/sharonfrenkel/Dev/hass-generator/tests/unit/area-package.test.js</summary>
+
+</details>
+
+</tool-use>
+
+---
+
+<think><details><summary>Thought Process</summary>
+Now I need to run the tests to make sure they pass. Let me also check if there are any other tests that might be affected by the changes.</details></think>
+
+---
+
+<tool-use data-tool-type="shell" data-tool-name="run_terminal_command_v2">
+<details><summary>Tool use: **run_terminal_command_v2** • Run command: cd /Users/sharonfrenkel/Dev/hass-generator && npm test -- --run 2>&1 | head -100</summary>
+
+```bash
+cd /Users/sharonfrenkel/Dev/hass-generator && npm test -- --run 2>&1 | head -100
+```
+
+```
+npm warn Unknown env config "devdir". This will stop working in the next major version of npm.
+
+&gt; hass-generator@0.2.0 test
+&gt; vitest run --run
+
+
+ RUN  v4.0.17 /Users/sharonfrenkel/Dev/hass-generator
+
+ ✓ tests/unit/yaml-utils.test.js (23 tests) 3ms
+ ✓ tests/unit/naming-check.test.js (13 tests) 6ms
+ ✓ tests/unit/transform.test.js (22 tests) 5ms
+ ✓ tests/unit/home-package.test.js (11 tests) 24ms
+ ✓ tests/unit/label-package.test.js (10 tests) 30ms
+ ❯ tests/unit/bubble-renderer.test.js (23 tests | 1 failed) 22ms
+       ✓ produces valid Lovelace structure with views 13ms
+       ✓ views have title and sections 0ms
+       ✓ sections contain cards array 1ms
+       ✓ uses dashboard_name from config 0ms
+       ✓ defaults to Home when no dashboard_name 1ms
+       ✓ tap_action targets scene with default_scene_suffix 0ms
+       ✓ area with AC has sub_button for climate entity 0ms
+       ✓ area with fan has sub_button for fan entity 0ms
+       ✓ preview card has correct hold_action for toggle 0ms
+       ✓ preview card navigates to popup on button_action tap 0ms
+       ✓ dimmable light uses slider button_type 0ms
+       ✓ on/off only light uses switch button_type 0ms
+       ✓ light with color modes has double_tap_action for more-info 0ms
+       ✓ light without advanced controls has no double_tap_action 0ms
+       × switch with companion bulb has entity pointing to bulb 4ms
+       ✓ returns card as-is when visibleToUsers is null 0ms
+       ✓ returns card as-is when visibleToUsers is empty array 0ms
+       ✓ wraps card in conditional when visibleToUsers has values 0ms
+       ✓ returns friendly name when provided 0ms
+       ✓ strips area prefix and title-cases 0ms
+       ✓ maps scene suffix standard to Standard 0ms
+       ✓ maps scene suffix minimal to Minimal 0ms
+       ✓ handles entity with no underscore 0ms
+ ❯ tests/unit/dashboard-data.test.js (29 tests | 2 failed) 25ms
+       ✓ respects pinned_areas order 12ms
+       ✓ sorts unpinned areas alphabetically by name 0ms
+       ✓ excludes areas in excluded_areas 0ms
+       ✓ skips areas without detectable prefix 0ms
+       ✓ extracts correct prefix from entities 0ms
+       ✓ includes visibleToUsers from dashboard config 0ms
+       ✓ sets visibleToUsers to null when not configured 0ms
+       ✓ excludes lights in excluded_lights 1ms
+       ✓ includes entities from included_lights 0ms
+       ✓ excluded light appears in otherEntities 0ms
+       ✓ excluded light in otherEntities has dimming properties 0ms
+       × synced entities are excluded from normal lights list 6ms
+       ✓ synced fixture excluded when its dashboard entity is in excluded_lights 0ms
+       × synced fixture appears in lights with correct toggle entity 1ms
+       ✓ light with brightness mode is dimmable 0ms
+       ✓ light with onoff mode only is not dimmable 0ms
+       ✓ synced fixture with dimmable bulb is marked dimmable 0ms
+       ✓ light with color modes has has_advanced_controls 0ms
+       ✓ light with brightness only does not have has_advanced_controls 1ms
+       ✓ excludes scenes in excluded_scenes 0ms
+       ✓ includes scenes from included_scenes (cross-area) 0ms
+       ✓ excludes scenes with _template suffix 0ms
+       ✓ includes regular area scenes 0ms
+       ✓ finds climate entity ending with _ac 0ms
+       ✓ returns null when no AC found 0ms
+       ✓ finds fan domain entity 0ms
+       ✓ returns null when no fan found 0ms
+       ✓ generates correct light group entity_id 0ms
+       ✓ uses area prefix for light group 0ms
+ ✓ tests/unit/area-package.test.js (31 tests) 55ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/unit/bubble-renderer.test.js &gt; bubble/renderer.js &gt; buildLightCard &gt; switch with companion bulb has entity pointing to bulb
+AssertionError: expected undefined to be defined
+ ❯ tests/unit/bubble-renderer.test.js:277:23
+    275|    // Find the switch with companion - entity should point to bulb
+    276|    const switchCard = lightsGrid.cards.find(c =&gt; c.entity === 'light.m…
+    277|    expect(switchCard).toBeDefined()
+       |                       ^
+    278|    expect(switchCard.button_type).toBe('slider')
+    279|   })
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯
+
+ FAIL  tests/unit/dashboard-data.test.js &gt; dashboard/data.js &gt; buildLightsList &gt; synced entities are excluded from normal lights list
+AssertionError: expected [ 'light.mb_standing_lamp', …(1) ] to include 'light.mb_soc_bulb'
+ ❯ tests/unit/dashboard-data.test.js:124:21
+    122|    expect(lightIds).not.toContain('switch.mb_soc')
+    123|    // But the synced fixture dashboard entity should appear
+    124|    expect(lightIds).toContain('light.mb_soc_bulb')
+       |                     ^
+    125|   })
+    126| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯
+
+ FAIL  tests/unit/dashboard-data.test.js &gt; dashboard/data.js &gt; buildLightsList &gt; synced fixture appears in lights with correct toggle entity
+AssertionError: expected undefined to be defined
+ ❯ tests/unit/dashboard-data.test.js:150:20
+    148|    const fixture = bedroom.lights.find(l =&gt; l.entity_id === 'light.mb_…
+    149| 
+
+```
+</details>
+</tool-use>
+
+---
+
+<think><details><summary>Thought Process</summary>
+I see there are failing tests in `dashboard-data.test.js` and `bubble-renderer.test.js`. These tests are expecting the old behavior where `light.mb_soc_bulb` would be the entity used. But with the new architecture, the fixture's dashboard entity is `light.mb_standing_lamp` (the template light), not the individual bulb.
+
+Let me read these test files to understand what needs to be updated.</details></think>
+
+---
+
+<tool-use data-tool-type="read" data-tool-name="read_file_v2">
+<details><summary>Tool use: **read_file_v2** • Read file: /Users/sharonfrenkel/Dev/hass-generator/tests/unit/dashboard-data.test.js</summary>
+
+</details>
+</tool-use>
+
+---
+
+<tool-use data-tool-type="read" data-tool-name="read_file_v2">
+<details><summary>Tool use: **read_file_v2** • Read file: /Users/sharonfrenkel/Dev/hass-generator/tests/unit/bubble-renderer.test.js</summary>
+
+</details>
+</tool-use>
+
+---
+
+<think><details><summary>Thought Process</summary>
+I see the issue. The tests are expecting `light.mb_soc_bulb` to be the entity for the fixture, but with the new architecture:
+1. The fixture's dashboard entity is `light.mb_standing_lamp` (the template light)
+2. The toggle entity remains `switch.mb_soc` or could be the template light as well
+
+Let me check what `getDashboardEntity` returns and understand what the expected entity_id should be.Looking at the `getDashboardEntity` function (line 97-105), it returns:
+- `entity_id: light.${fixtureId}` - the template light
+- `toggle_entity: light.${fixtureId}` - also the template lightSo the tests expecting `light.mb_soc_bulb` should be updated to expect `light.mb_standing_lamp` (the template light).
+
+Let me update these tests.</details></think>
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="edit_file_v2">
+
+<details><summary>Tool use: **edit_file_v2** • Edit file: /Users/sharonfrenkel/Dev/hass-generator/tests/unit/dashboard-data.test.js</summary>
+
+</details>
+
+</tool-use>
+
+---
+
+<think><details><summary>Thought Process</summary>
+Now let me update the next test that checks for the fixture appearing with the correct toggle entity.</details></think>
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="edit_file_v2">
+
+<details><summary>Tool use: **edit_file_v2** • Edit file: /Users/sharonfrenkel/Dev/hass-generator/tests/unit/dashboard-data.test.js</summary>
+
+</details>
+
+</tool-use>
+
+---
+
+<think><details><summary>Thought Process</summary>
+Now let me update the bubble-renderer test that's checking for the entity.</details></think>
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="edit_file_v2">
+
+<details><summary>Tool use: **edit_file_v2** • Edit file: /Users/sharonfrenkel/Dev/hass-generator/tests/unit/bubble-renderer.test.js</summary>
+
+</details>
+
+</tool-use>
+
+---
+
+<think><details><summary>Thought Process</summary>
+Now let me run the tests again to see if they pass.</details></think>
+
+---
+
+<tool-use data-tool-type="shell" data-tool-name="run_terminal_command_v2">
+<details><summary>Tool use: **run_terminal_command_v2** • Run command: cd /Users/sharonfrenkel/Dev/hass-generator && npm test -- --run 2>&1 | head -80</summary>
+
+```bash
+cd /Users/sharonfrenkel/Dev/hass-generator && npm test -- --run 2>&1 | head -80
+```
+
+```
+npm warn Unknown env config "devdir". This will stop working in the next major version of npm.
+
+&gt; hass-generator@0.2.0 test
+&gt; vitest run --run
+
+
+ RUN  v4.0.17 /Users/sharonfrenkel/Dev/hass-generator
+
+ ✓ tests/unit/yaml-utils.test.js (23 tests) 3ms
+ ✓ tests/unit/naming-check.test.js (13 tests) 4ms
+ ✓ tests/unit/home-package.test.js (11 tests) 16ms
+ ✓ tests/unit/transform.test.js (22 tests) 5ms
+ ✓ tests/unit/label-package.test.js (10 tests) 19ms
+ ✓ tests/unit/dashboard-data.test.js (29 tests) 12ms
+ ✓ tests/unit/bubble-renderer.test.js (23 tests) 14ms
+ ✓ tests/unit/area-package.test.js (31 tests) 68ms
+
+ Test Files  8 passed (8)
+      Tests  162 passed (162)
+   Start at  19:35:33
+   Duration  239ms (transform 322ms, setup 0ms, import 490ms, tests 139ms, environment 1ms)
+
+
+```
+</details>
+</tool-use>
+
+---
+
+<think><details><summary>Thought Process</summary>
+All tests pass. Now let me mark the tests todo as complete and update the documentation (CONFIG_OPTIONS.md).</details></think>
+
+---
+
+<tool-use data-tool-type="task" data-tool-name="todo_write">
+<details><summary>Tool use: **todo_write** • Todo List</summary>
+
+- [x] Modify generateLightGroup to always create group (even single bulb)
+- [x] Update generateTemplateLight and getUnderlyingLightTarget to always wrap the group
+- [x] Update generateSyncAutomation to trigger on group instead of individual bulbs
+- [x] Add mode: restart to sync automation
+- [x] Add target state filter to prevent redundant commands
+- [x] Update getGeneratedGroupEntityIds and related helper functions
+- [x] Update area-package.test.js tests for new behavior
+- [-] Update CONFIG_OPTIONS.md "What Gets Generated" table
+
+</details>
+</tool-use>
+
+---
+
+<tool-use data-tool-type="read" data-tool-name="read_file_v2">
+<details><summary>Tool use: **read_file_v2** • Read file: /Users/sharonfrenkel/Dev/hass-generator/CONFIG_OPTIONS.md</summary>
+
+</details>
+</tool-use>
+
+---
+
+<think><details><summary>Thought Process</summary>
+I need to update the "What Gets Generated" table and the description below it to reflect the new behavior:1. Groups are now always created (even for single bulb)
+2. Template lights are always created3. Sync automation now uses `mode: restart` and triggers on the group, not individual bulbsLet me update this section.</details></think>
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="edit_file_v2">
+
+<details><summary>Tool use: **edit_file_v2** • Edit file: /Users/sharonfrenkel/Dev/hass-generator/CONFIG_OPTIONS.md</summary>
+
+</details>
+
+</tool-use>
+
+---
+
+<think><details><summary>Thought Process</summary>
+Now let me mark the final todo as complete and run the tests one more time to make sure everything is still working.</details></think>
+
+---
+
+<tool-use data-tool-type="task" data-tool-name="todo_write">
+<details><summary>Tool use: **todo_write** • Todo List</summary>
+
+- [x] Modify generateLightGroup to always create group (even single bulb)
+- [x] Update generateTemplateLight and getUnderlyingLightTarget to always wrap the group
+- [x] Update generateSyncAutomation to trigger on group instead of individual bulbs
+- [x] Add mode: restart to sync automation
+- [x] Add target state filter to prevent redundant commands
+- [x] Update getGeneratedGroupEntityIds and related helper functions
+- [x] Update area-package.test.js tests for new behavior
+- [x] Update CONFIG_OPTIONS.md "What Gets Generated" table
+
+</details>
+</tool-use>
+
+---
+
+<tool-use data-tool-type="shell" data-tool-name="run_terminal_command_v2">
+<details><summary>Tool use: **run_terminal_command_v2** • Run command: cd /Users/sharonfrenkel/Dev/hass-generator && npm test -- --run 2>&1 | tail -20</summary>
+
+```bash
+cd /Users/sharonfrenkel/Dev/hass-generator && npm test -- --run 2>&1 | tail -20
+```
+
+```
+&gt; hass-generator@0.2.0 test
+&gt; vitest run --run
+
+
+ RUN  v4.0.17 /Users/sharonfrenkel/Dev/hass-generator
+
+ ✓ tests/unit/yaml-utils.test.js (23 tests) 3ms
+ ✓ tests/unit/naming-check.test.js (13 tests) 6ms
+ ✓ tests/unit/transform.test.js (22 tests) 3ms
+ ✓ tests/unit/home-package.test.js (11 tests) 16ms
+ ✓ tests/unit/label-package.test.js (10 tests) 18ms
+ ✓ tests/unit/bubble-renderer.test.js (23 tests) 11ms
+ ✓ tests/unit/dashboard-data.test.js (29 tests) 13ms
+ ✓ tests/unit/area-package.test.js (31 tests) 40ms
+
+ Test Files  8 passed (8)
+      Tests  162 passed (162)
+   Start at  19:36:00
+   Duration  199ms (transform 276ms, setup 0ms, import 421ms, tests 109ms, environment 1ms)
+
+
+```
+</details>
+</tool-use>
+
+---
+
+<think><details><summary>Thought Process</summary>
+All tests pass. Let me also check for any linter errors in the files I modified.</details></think>
+
+---
+
+<tool-use data-tool-type="unknown" data-tool-name="read_lints">
+<details>
+<summary>Tool use: **read_lints**</summary>
+
+
+Parameters:
+
+```json
+{
+  "paths": [
+    "/Users/sharonfrenkel/Dev/hass-generator/src/generators/synced-entities.js",
+    "/Users/sharonfrenkel/Dev/hass-generator/tests/unit/area-package.test.js",
+    "/Users/sharonfrenkel/Dev/hass-generator/tests/unit/dashboard-data.test.js",
+    "/Users/sharonfrenkel/Dev/hass-generator/tests/unit/bubble-renderer.test.js"
+  ]
+}
+```
+Result:
+
+```json
+{
+  "linterErrorsByFile": [
+    {
+      "relativeWorkspacePath": "/Users/sharonfrenkel/Dev/hass-generator/src/generators/synced-entities.js"
+    },
+    {
+      "relativeWorkspacePath": "/Users/sharonfrenkel/Dev/hass-generator/tests/unit/area-package.test.js"
+    },
+    {
+      "relativeWorkspacePath": "/Users/sharonfrenkel/Dev/hass-generator/tests/unit/dashboard-data.test.js"
+    },
+    {
+      "relativeWorkspacePath": "/Users/sharonfrenkel/Dev/hass-generator/tests/unit/bubble-renderer.test.js"
+    }
+  ]
+}
+```
+Status: **completed**
+
+
+</details>
+</tool-use>
+
+---
+
+<think><details><summary>Thought Process</summary>
+All done. Let me provide a summary of the changes made.</details></think>
+
+---
+
+📗 All tasks completed successfully. Here's a summary of the changes:
+
+## Changes Made
+
+### [src/generators/synced-entities.js](src/generators/synced-entities.js)
+
+1. **Added `getLightEntities()` helper** - Extracts light entities (entities with `entity_id` starting with `light.`)
+
+2. **Modified `generateLightGroup()`** - Now always creates a group, even for single bulb fixtures. Groups contain all light entities in the fixture.
+
+3. **Simplified `getUnderlyingLightTarget()`** - Always returns the group entity ID (`light.${fixtureId}_group`)
+
+4. **Updated `generateTemplateLight()`** - The no-power case now targets the group entity directly (simpler code, removed array handling)
+
+5. **Updated `generateSyncAutomation()`**:
+   - Sync triggers on group + non-light entities (not individual bulbs)
+   - Added `mode: 'restart'` for better responsiveness
+   - Added state filter to only target entities not already in target state: `reject('is_state', target_state)`
+
+6. **Updated `getGeneratedGroupEntityIds()`** - Returns all fixture group IDs (since groups are always generated now)
+
+### Tests Updated
+
+- [tests/unit/area-package.test.js](tests/unit/area-package.test.js) - Added tests for `mode: restart`, state filter, and always-created groups
+- [tests/unit/dashboard-data.test.js](tests/unit/dashboard-data.test.js) - Updated expected entity IDs to use template light
+- [tests/unit/bubble-renderer.test.js](tests/unit/bubble-renderer.test.js) - Updated expected entity IDs
+
+### Documentation Updated
+
+- [CONFIG_OPTIONS.md](CONFIG_OPTIONS.md) - Updated "What Gets Generated" table to reflect new behavior
+
+## Result
+
+The sync automation now:
+- Triggers on the group entity (single trigger) instead of individual bulbs (multiple simultaneous triggers)
+- Uses `mode: restart` to respond to the most recent state
+- Filters targets by state to avoid redundant commands
+
+This eliminates the race condition that caused the endless toggle loop.
+
+---
+
+_**User**_
+
+is a template light always generated, even when it's not required to sync power and just as a wrapper for consistency?
+
+---
+
+_**Agent (model claude-4.5-opus-high-thinking, mode Agent)**_
+
+<think><details><summary>Thought Process</summary>
+The user is asking whether a template light is always generated for synced entities fixtures, even when there's no power control (just as a pass-through wrapper for consistency).
+
+Let me check the current code to see if `generateTemplateLight` is always called.</details></think>
+
+---
+
+📗 Let me check the current implementation to confirm.
+
+---
+
+<tool-use data-tool-type="read" data-tool-name="read_file_v2">
+<details><summary>Tool use: **read_file_v2** • Read file: /Users/sharonfrenkel/Dev/hass-generator/src/generators/synced-entities.js</summary>
+
+</details>
+</tool-use>
+
+---
+
+<think><details><summary>Thought Process</summary>
+Looking at line 594, `generateTemplateLight` is called for every fixture and pushed to the array if it returns a value. Let me check `generateTemplateLight` to see if it always returns something or has conditions that might return null.</details></think>
+
+---
+
+<tool-use data-tool-type="read" data-tool-name="read_file_v2">
+<details><summary>Tool use: **read_file_v2** • Read file: /Users/sharonfrenkel/Dev/hass-generator/src/generators/synced-entities.js</summary>
+
+</details>
+</tool-use>
+
+---
+
+<think><details><summary>Thought Process</summary>
+Looking at `generateTemplateLight`:
+
+1. The function always returns an object (never returns `null`)
+2. If `fixture.power` is set, it creates a template that coordinates power + bulb/group (lines 220-278)
+3. If `fixture.power` is null, it creates a pass-through wrapper that targets the group (lines 281-312)
+
+So yes, **a template light is always generated** for every fixture, even when there's no power control. This provides consistency - `light.${fixtureId}` is always the entity that scenes, automations, and dashboards should target.
+
+The comment on line 206 confirms this design intent: "Always creates light.${fixtureId} so scenes, automations, and UI have one target."</details></think>
+
+---
+
+Yes, a template light is **always generated** for every fixture, regardless of whether `power` is set.
+
+Looking at `generateTemplateLight` (lines 212-312):
+
+1. **When `power` is set**: Creates a template that coordinates power control + bulb/group
+2. **When `power` is null**: Creates a simple pass-through wrapper that targets the group
+
+The function never returns `null` - it always returns a template light object. The comment on line 206 confirms this design intent:
+
+> "Always creates light.${fixtureId} so scenes, automations, and UI have one target."
+
+This is intentional for consistency:
+- Scenes always target `light.{fixture_id}`
+- Dashboards always use `light.{fixture_id}` 
+- Automations don't need to know about `_group` suffixes or individual bulb IDs
+- The mental model is simplified: one fixture = one entity
+
+---
+
+_**User**_
+
+should getUnderlyingLightTarget() return the group or the template?
+
+---
+
+_**Agent (model claude-4.5-opus-high-thinking, mode Agent)**_
+
+<think><details><summary>Thought Process</summary>
+The user is asking about what `getUnderlyingLightTarget()` should return - the group or the template light.
+
+Let me think about this:
+
+1. `getUnderlyingLightTarget()` is used by `generateTemplateLight()` in the no-power case to determine what the template light should wrap/target.
+
+2. The template light IS `light.${fixtureId}` - it's the wrapper itself.
+
+3. The group is `light.${fixtureId}_group` - it's what the template wraps.
+
+So the function should return the **group** entity ID, because:
+- The template light needs to know what to target (what to wrap)
+- The template IS `light.${fixtureId}`, so it wouldn't make sense for it to return that
+- The template's `turn_on`, `turn_off`, `value_template`, etc. all need to target the underlying group
+
+The current implementation returns `light.${fixtureId}_group`, which is correct.
+
+If it returned the template, you'd have a circular reference - the template trying to control itself.</details></think>
+
+---
+
+📗 It should return the **group** (`light.${fixtureId}_group`), which is what it currently does.
+
+The naming is perhaps confusing, but think of it this way:
+
+- **Template light** = `light.${fixtureId}` = the wrapper/facade that external things (scenes, dashboards, automations) interact with
+- **Underlying target** = `light.${fixtureId}_group` = what the template actually controls
+
+`getUnderlyingLightTarget()` answers the question: "What should the template light target/wrap?"
+
+If it returned the template itself, you'd have a circular reference - the template trying to control itself:
+
+```yaml
+# This would be wrong:
+mwc_bathroom_wall_lights:
+  turn_on:
+    service: light.turn_on
+    target:
+      entity_id: light.mwc_bathroom_wall_lights  # Calling itself!
+```
+
+The correct behavior (current implementation):
+
+```yaml
+# Template wraps the group:
+mwc_bathroom_wall_lights:
+  turn_on:
+    service: light.turn_on
+    target:
+      entity_id: light.mwc_bathroom_wall_lights_group  # The actual bulbs
+```
+
+---
+
