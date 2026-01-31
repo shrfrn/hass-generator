@@ -322,6 +322,31 @@ describe('area-package.js', () => {
 			expect(content).toContain("level_template:")
 		})
 
+		test('syncedEntities with icon generates icon_template on template light', async () => {
+			const config = {
+				areas: {
+					bedroom: {
+						syncedEntities: {
+							mb_wall_light: {
+								name: 'Bedroom Wall Light',
+								icon: 'mdi:wall-sconce-round',
+								power: null,
+								entities: [
+									{ entity_id: 'light.mb_relay', sync: true },
+									{ entity_id: 'light.mb_bulb', sync: true, controls: 'dimmable' },
+								],
+							},
+						},
+					},
+				},
+			}
+			await generateAreaPackages(minimalInventory, config, TEST_DIR)
+
+			const content = readFileSync(join(TEST_DIR, 'areas/mb_bedroom.yaml'), 'utf8')
+			expect(content).toContain('icon_template:')
+			expect(content).toContain("{{ 'mdi:wall-sconce-round' }}")
+		})
+
 		test('syncedEntities blueprint automation uses device name property', async () => {
 			const config = {
 				areas: {

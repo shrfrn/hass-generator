@@ -276,6 +276,7 @@ describe('bubble/renderer.js', () => {
 			const fixtureCard = lightsGrid.cards.find(c => c.entity === 'light.mb_standing_lamp')
 			expect(fixtureCard).toBeDefined()
 			expect(fixtureCard.button_type).toBe('slider')
+			expect(fixtureCard.icon).toBe('mdi:wall-sconce-round')
 		})
 	})
 })

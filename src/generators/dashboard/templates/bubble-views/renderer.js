@@ -337,6 +337,7 @@ function buildLightCard(light, t) {
 		name: displayName,
 		scrolling_effect: true,
 	}
+	if (light.icon) card.icon = light.icon
 
 	const toggleAction = brightness_entity !== toggle_entity
 		? {

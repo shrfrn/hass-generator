@@ -1676,3 +1676,82 @@ No matches in hass-config. So the config option `dimmable_companions` is not use
 
 ---
 
+
+No. **`dimmable_companions` is not used anywhere in your current hass-config.** There are no occurrences of that key in the config workspace, so it’s never instantiated there. The generator still supports it in code (area-package, dashboard/data, scene-template-package), but your config doesn’t set it.
+
+---
+
+_**User**_
+
+lets remove all support from the code, including docs, types and tests.
+
+---
+
+_**Agent (model default, mode Agent)**_
+
+<think><details><summary>Thought Process</summary>
+
+The user wants to remove all support for `dimmableCompanions` / `dimmable_companions` from the codebase, including:
+1. Code that uses it (area-package.js, dashboard/data.js, scene-template-package.js)
+2. Documentation
+3. Types
+4. Tests
+
+I need to:
+1. Find all usages of dimmableCompanions, dimmable_companions, companionBulbs, enrichWithDimming in source, docs, types, tests
+2. Remove the logic while preserving behavior where it's just "exclude companion bulbs" - but since the config is never set, companionBulbs will always be empty, so removing it means we just stop reading the config and building the sets; the filter logic can be simplified (filter out nothing from dimmable_companions since it's always empty).
+
+I will search comprehensively and then make the changes.
+</details></think>
+
+---
+
+
+Searching the codebase for all references to dimmable companions so we can remove support.
+
+
+---
+
+<tool-use data-tool-type="unknown" data-tool-name="ripgrep_raw_search">
+<details>
+<summary>Tool use: **ripgrep_raw_search**</summary>
+
+
+Parameters:
+
+```json
+{
+  "pattern": "dimmable_companions|dimmableCompanions|companionBulbs|enrichWithDimming|actuatorsWithCompanions",
+  "path": "/Users/sharonfrenkel/Dev/hass-generator",
+  "glob": "*.{js,ts,md,json}",
+  "caseInsensitive": false
+}
+```
+Status: **loading**
+
+
+</details>
+</tool-use>
+
+---
+
+<tool-use data-tool-type="unknown" data-tool-name="list_dir_v2">
+<details>
+<summary>Tool use: **list_dir_v2**</summary>
+
+
+Parameters:
+
+```json
+{
+  "targetDirectory": "/Users/sharonfrenkel/Dev/hass-generator"
+}
+```
+Status: **loading**
+
+
+</details>
+</tool-use>
+
+---
+

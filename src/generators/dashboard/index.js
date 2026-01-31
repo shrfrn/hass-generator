@@ -9,7 +9,7 @@ import { loadTemplate, getAvailableTemplates } from './templates/index.js'
  * Generate a dashboard using the specified template
  * @param {object} inventory - The HASS inventory data
  * @param {object} config - Dashboard config (must include 'template' field)
- * @param {object} generatorConfig - Generator config (for dimmable_companions, etc.)
+ * @param {object} generatorConfig - Generator config (for syncedEntities, etc.)
  * @param {object} translator - Translator object with tEntity, tUi functions
  * @returns {Promise<object>} Lovelace dashboard YAML structure
  */
