@@ -179,6 +179,7 @@ function buildAreaData(areaCtx, configCtx, inventoryCtx) {
 	const lightGroup = `group.${prefix}lights`
 	const acEntity = findAcEntity(entities)
 	const fanEntity = findFanEntity(entities)
+	const mediaPlayerEntity = findMediaPlayerEntity(entities)
 	const lights = buildLightsList(entities, excludedLights, includedLights, syncedEntities, syncedEntityIds)
 	const otherEntities = buildOtherList(entities, lights, acEntity, fanEntity, configCtx)
 	const scenesList = buildScenesList(scenes, excludedScenes, includedScenes, inventoryCtx.allScenes)
@@ -187,6 +188,7 @@ function buildAreaData(areaCtx, configCtx, inventoryCtx) {
 		lightGroup,
 		acEntity,
 		fanEntity,
+		mediaPlayerEntity,
 		scenes: scenesList,
 		lights,
 		otherEntities,
@@ -210,6 +212,11 @@ function findFanEntity(entities) {
 	)
 
 	return fanSwitch?.entity_id || null
+}
+
+function findMediaPlayerEntity(entities) {
+	const tv = entities.find(e => e.domain === 'media_player' && e.entity_id.endsWith('_tv'))
+	return tv?.entity_id || null
 }
 
 function buildLightsList(entities, excludedLights, includedLights, syncedEntities, syncedEntityIds) {
@@ -303,7 +310,7 @@ function buildOtherList(entities, lightsInSection, acEntity, fanEntity, configCt
 		'climate', 'fan', 'group', 'update', 'button', 'event',
 		'number', 'select', 'camera', 'device_tracker', 'person',
 		'remote', 'image', 'todo', 'tts', 'stt', 'conversation',
-		'siren', 'time', 'date', 'datetime',
+		'siren', 'time', 'date', 'datetime', 'media_player',
 	]
 
 	return entities

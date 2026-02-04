@@ -141,7 +141,7 @@ function buildPresenceCard(presenceCardConfig) {
 }
 
 function buildAreaView(areaData, dashboardPath, defaultSceneSuffix, t) {
-	const { area, prefix, visibleToUsers, scenes, lights, acEntity, fanEntity, otherEntities, lightGroup } = areaData
+	const { area, prefix, visibleToUsers, scenes, lights, acEntity, fanEntity, mediaPlayerEntity, otherEntities, lightGroup, areaConfig } = areaData
 	const areaPath = area.id.replace(/_/g, '-')
 	const defaultScene = `scene.${prefix}${defaultSceneSuffix}`
 
@@ -167,9 +167,23 @@ function buildAreaView(areaData, dashboardPath, defaultSceneSuffix, t) {
 		cards.push(buildClimateCard(acEntity, fanEntity, t))
 	}
 
+	const mediaConfig = areaConfig?.media
+	let mediaPopupStack = null
+	if (mediaPlayerEntity && mediaConfig?.remote_entity) {
+		const { buttonCard, popupStack } = buildMediaCard(mediaPlayerEntity, mediaConfig, prefix, dashboardPath, areaPath, t)
+		cards.push(buildSeparator(t.ui('section.media')))
+		cards.push(buttonCard)
+		mediaPopupStack = popupStack
+	}
+
 	if (otherEntities.length > 0) {
 		cards.push(buildSeparator(t.ui('section.other')))
 		cards.push(buildOtherGrid(otherEntities, t))
+	}
+
+	// Popup must be at the END of the view's cards (after all sections)
+	if (mediaPopupStack) {
+		cards.push(mediaPopupStack)
 	}
 
 	const view = {
@@ -447,3 +461,301 @@ function buildOtherGrid(entities, t) {
 	}
 }
 
+const DEFAULT_MEDIA_SOURCES = [
+	{ name: 'Netflix', icon: 'mdi:netflix', source: 'Netflix' },
+	{ name: 'YouTube', icon: 'mdi:youtube', source: 'YouTube' },
+	{ name: 'Apple TV', icon: 'mdi:apple', source: 'TV' },
+]
+
+const PLATFORM_POPUP_HASH = {
+	apple_tv: 'aptv_remote',
+	android_tv: 'atv_remote',
+}
+
+function buildMediaCard(mediaPlayerEntity, mediaConfig, prefix, dashboardPath, areaPath, t) {
+	const { platform, remote_entity, sources = DEFAULT_MEDIA_SOURCES } = mediaConfig
+	const popupHashSuffix = PLATFORM_POPUP_HASH[platform] || PLATFORM_POPUP_HASH.apple_tv
+	const popupHash = `#${prefix}${popupHashSuffix}`
+
+	// Main button card for the Media section
+	const buttonCard = {
+		type: 'custom:bubble-card',
+		card_type: 'button',
+		button_type: 'switch',
+		entity: remote_entity,
+		icon: 'mdi:remote-tv',
+		button_action: {
+			tap_action: {
+				action: 'navigate',
+				navigation_path: popupHash,
+			},
+		},
+		tap_action: {
+			action: 'navigate',
+			navigation_path: popupHash,
+		},
+		sub_button: {
+			main: [
+				{
+					icon: 'mdi:volume-high',
+					name: 'Volume',
+					entity: mediaPlayerEntity,
+					tap_action: {
+						action: 'perform-action',
+						perform_action: 'media_player.volume_mute',
+						target: {},
+						data: { is_volume_muted: false },
+					},
+				},
+				{
+					icon: 'mdi:play-pause',
+					force_icon: true,
+					content_layout: 'icon-left',
+					fill_width: false,
+					name: 'Play / Pause',
+					tap_action: {
+						action: 'perform-action',
+						perform_action: 'remote.send_command',
+						target: { entity_id: remote_entity },
+						data: { command: 'play_pause' },
+					},
+				},
+				{
+					entity: remote_entity,
+					icon: 'mdi:power',
+					force_icon: true,
+					name: 'Power',
+					tap_action: {
+						action: 'perform-action',
+						perform_action: 'remote.send_command',
+						target: { entity_id: [remote_entity] },
+						data: { command: 'wakeup' },
+					},
+					hold_action: {
+						action: 'perform-action',
+						perform_action: 'remote.send_command',
+						target: { entity_id: remote_entity },
+						data: { num_repeats: 1, delay_secs: 0.4, hold_secs: 0, command: 'suspend' },
+					},
+				},
+			],
+			bottom: [],
+		},
+	}
+
+	// Popup cards - these go in a vertical-stack at the END of the view
+	const popupCards = []
+
+	// Popup card
+	popupCards.push({
+		type: 'custom:bubble-card',
+		card_type: 'pop-up',
+		hash: popupHash,
+		button_type: 'name',
+		show_header: false,
+		card_layout: 'large',
+		show_icon: true,
+		sub_button: { main: [], bottom: [] },
+	})
+
+	// Sources sub-buttons
+	const sourceButtons = sources.map(src => ({
+		icon: src.icon,
+		force_icon: true,
+		content_layout: 'icon-left',
+		fill_width: false,
+		name: src.name,
+		tap_action: {
+			action: 'perform-action',
+			perform_action: 'media_player.select_source',
+			target: { entity_id: mediaPlayerEntity },
+			data: { source: src.source },
+		},
+		hold_action: {
+			action: 'perform-action',
+			perform_action: 'remote.send_command',
+			target: { entity_id: remote_entity },
+			data: { command: 'home_hold' },
+		},
+	}))
+
+	popupCards.push({
+		type: 'custom:bubble-card',
+		card_type: 'sub-buttons',
+		rows: 0.938,
+		hide_main_background: true,
+		sub_button: {
+			main: [],
+			bottom: [
+				{
+					name: 'Sources',
+					buttons_layout: 'inline',
+					justify_content: 'space-between',
+					group: sourceButtons,
+				},
+				{
+					name: 'Exit',
+					buttons_layout: 'inline',
+					group: [
+						{
+							icon: 'mdi:close',
+							force_icon: true,
+							content_layout: 'icon-left',
+							fill_width: false,
+							name: 'Close',
+							tap_action: {
+								action: 'navigate',
+								navigation_path: `/${dashboardPath}/${areaPath}`,
+							},
+							hold_action: {
+								action: 'perform-action',
+								perform_action: 'remote.send_command',
+								target: { entity_id: remote_entity },
+								data: { command: 'suspend' },
+							},
+						},
+					],
+				},
+			],
+		},
+	})
+
+	// Touchpad - universal remote card
+	popupCards.push({
+		type: 'custom:universal-remote-card',
+		rows: [['touchpad']],
+		platform: 'Apple TV',
+		custom_actions: [],
+		remote_id: remote_entity,
+		media_player_id: mediaPlayerEntity,
+		autofill_entity_id: true,
+	})
+
+	// Skip buttons
+	popupCards.push({
+		type: 'custom:bubble-card',
+		card_type: 'sub-buttons',
+		rows: 0.938,
+		hide_main_background: true,
+		sub_button: {
+			main: [],
+			bottom: [
+				{
+					name: 'Skip',
+					buttons_layout: 'inline',
+					justify_content: 'space-around',
+					group: [
+						{
+							icon: 'mdi:rewind-10',
+							force_icon: true,
+							content_layout: 'icon-left',
+							fill_width: false,
+							name: 'Back 10 Secs.',
+							tap_action: {
+								action: 'perform-action',
+								perform_action: 'remote.send_command',
+								target: { entity_id: remote_entity },
+								data: { command: 'skip_backward' },
+							},
+						},
+						{
+							icon: 'mdi:fast-forward-10',
+							force_icon: true,
+							content_layout: 'icon-left',
+							fill_width: false,
+							name: 'Forward 10 Secs.',
+							tap_action: {
+								action: 'perform-action',
+								perform_action: 'remote.send_command',
+								target: { entity_id: remote_entity },
+								data: { command: 'skip_forward' },
+							},
+						},
+					],
+				},
+			],
+		},
+	})
+
+	// Navigation buttons
+	popupCards.push({
+		type: 'custom:bubble-card',
+		card_type: 'sub-buttons',
+		rows: 0.938,
+		hide_main_background: true,
+		footer_mode: true,
+		footer_full_width: true,
+		footer_bottom_offset: '30',
+		sub_button: {
+			main: [],
+			bottom: [
+				{
+					name: 'Automatically grouped',
+					buttons_layout: 'inline',
+					group: [],
+				},
+				{
+					name: 'Nav',
+					buttons_layout: 'inline',
+					justify_content: 'space-around',
+					group: [
+						{
+							icon: 'mdi:play-pause',
+							force_icon: true,
+							content_layout: 'icon-left',
+							fill_width: false,
+							name: 'Play / Pause',
+							tap_action: {
+								action: 'perform-action',
+								perform_action: 'remote.send_command',
+								target: { entity_id: remote_entity },
+								data: { command: 'play_pause' },
+							},
+						},
+						{
+							icon: 'mdi:chevron-left',
+							force_icon: true,
+							content_layout: 'icon-left',
+							fill_width: false,
+							name: 'Back',
+							tap_action: {
+								action: 'perform-action',
+								perform_action: 'remote.send_command',
+								target: { entity_id: remote_entity },
+								data: { command: 'menu' },
+							},
+						},
+						{
+							icon: 'mdi:television',
+							force_icon: true,
+							content_layout: 'icon-left',
+							fill_width: false,
+							name: 'Home',
+							tap_action: {
+								action: 'perform-action',
+								perform_action: 'remote.send_command',
+								target: { entity_id: remote_entity },
+								data: { command: 'home' },
+							},
+							hold_action: {
+								action: 'perform-action',
+								perform_action: 'remote.send_command',
+								target: { entity_id: remote_entity },
+								data: { command: 'home_hold' },
+							},
+						},
+					],
+				},
+			],
+		},
+	})
+
+	// Return button card and popup stack (popup must be at END of view in vertical-stack)
+	return {
+		buttonCard,
+		popupStack: {
+			type: 'vertical-stack',
+			cards: popupCards,
+		},
+	}
+}

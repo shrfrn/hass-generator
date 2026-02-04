@@ -278,6 +278,30 @@ describe('dashboard/data.js', () => {
 		})
 	})
 
+	describe('findMediaPlayerEntity', () => {
+
+		test('finds media_player entity ending with _tv', () => {
+			const result = prepareAllAreaData(minimalInventory, {}, generatorConfig)
+			const lr = result.find(r => r.area.id === 'living_room')
+
+			expect(lr.mediaPlayerEntity).toBe('media_player.lr_tv')
+		})
+
+		test('returns null when no media_player ending with _tv found', () => {
+			const result = prepareAllAreaData(minimalInventory, {}, generatorConfig)
+			const bedroom = result.find(r => r.area.id === 'bedroom')
+
+			expect(bedroom.mediaPlayerEntity).toBeNull()
+		})
+
+		test('does not match media_player entities without _tv suffix', () => {
+			const result = prepareAllAreaData(minimalInventory, {}, generatorConfig)
+			const kitchen = result.find(r => r.area.id === 'kitchen')
+
+			expect(kitchen.mediaPlayerEntity).toBeNull()
+		})
+	})
+
 	describe('lightGroup', () => {
 
 		test('generates correct light group entity_id', () => {

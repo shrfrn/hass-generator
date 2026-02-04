@@ -116,6 +116,34 @@
       "icon": null
     },
     {
+      "entity_id": "media_player.lr_tv",
+      "domain": "media_player",
+      "name": "Living Room TV",
+      "state": "off",
+      "attributes": { "source_list": ["Netflix", "YouTube", "TV"] },
+      "area_id": "living_room",
+      "device_id": null,
+      "labels": [],
+      "platform": "demo",
+      "disabled_by": null,
+      "hidden_by": null,
+      "icon": null
+    },
+    {
+      "entity_id": "remote.lr_apple_tv",
+      "domain": "remote",
+      "name": "Apple TV Remote",
+      "state": "off",
+      "attributes": {},
+      "area_id": "living_room",
+      "device_id": null,
+      "labels": [],
+      "platform": "demo",
+      "disabled_by": null,
+      "hidden_by": null,
+      "icon": null
+    },
+    {
       "entity_id": "scene.lr_standard",
       "domain": "scene",
       "name": "Standard",

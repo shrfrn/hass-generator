@@ -279,6 +279,153 @@ describe('bubble/renderer.js', () => {
 			expect(fixtureCard.icon).toBe('mdi:wall-sconce-round')
 		})
 	})
+
+	describe('buildMediaCard', () => {
+
+		test('area with media_player and media config has media section', () => {
+			const areaData = getAreaData()
+			const result = render(areaData, dashboardConfig)
+
+			const cards = result.views[0].sections[0].cards
+			const lrPopup = cards.find(c => {
+				const stack = c.card || c
+				return stack.type === 'vertical-stack' &&
+					stack.cards?.some(card => card.hash === '#lr_details')
+			})
+
+			expect(lrPopup).toBeDefined()
+
+			const stack = lrPopup.card || lrPopup
+
+			// Find media separator (fallback translation returns lowercase 'media')
+			const mediaSeparator = stack.cards.find(c =>
+				c.card_type === 'separator' && c.name === 'media',
+			)
+			expect(mediaSeparator).toBeDefined()
+		})
+
+		test('media card has correct popup hash for apple_tv platform', () => {
+			const areaData = getAreaData()
+			const result = render(areaData, dashboardConfig)
+
+			const cards = result.views[0].sections[0].cards
+			const lrPopup = cards.find(c => {
+				const stack = c.card || c
+				return stack.type === 'vertical-stack' &&
+					stack.cards?.some(card => card.hash === '#lr_details')
+			})
+
+			const stack = lrPopup.card || lrPopup
+
+			// Find the media card vertical-stack
+			const mediaStack = stack.cards.find(c =>
+				c.type === 'vertical-stack' &&
+				c.cards?.some(card => card.card_type === 'pop-up' && card.hash === '#lr_aptv_remote'),
+			)
+
+			expect(mediaStack).toBeDefined()
+		})
+
+		test('media card popup contains universal-remote-card with touchpad', () => {
+			const areaData = getAreaData()
+			const result = render(areaData, dashboardConfig)
+
+			const cards = result.views[0].sections[0].cards
+			const lrPopup = cards.find(c => {
+				const stack = c.card || c
+				return stack.type === 'vertical-stack' &&
+					stack.cards?.some(card => card.hash === '#lr_details')
+			})
+
+			const stack = lrPopup.card || lrPopup
+
+			const mediaStack = stack.cards.find(c =>
+				c.type === 'vertical-stack' &&
+				c.cards?.some(card => card.type === 'custom:universal-remote-card'),
+			)
+
+			expect(mediaStack).toBeDefined()
+
+			const touchpadCard = mediaStack.cards.find(c => c.type === 'custom:universal-remote-card')
+			expect(touchpadCard).toBeDefined()
+			expect(touchpadCard.platform).toBe('Apple TV')
+			expect(touchpadCard.remote_id).toBe('remote.lr_apple_tv')
+			expect(touchpadCard.media_player_id).toBe('media_player.lr_tv')
+		})
+
+		test('area without media config has no media section', () => {
+			const areaData = getAreaData()
+			const result = render(areaData, dashboardConfig)
+
+			const cards = result.views[0].sections[0].cards
+			const bedroomPopup = cards.find(c => {
+				const stack = c.card || c
+				return stack.type === 'vertical-stack' &&
+					stack.cards?.some(card => card.hash === '#mb_details')
+			})
+
+			expect(bedroomPopup).toBeDefined()
+
+			const stack = bedroomPopup.card || bedroomPopup
+
+			// Should not have media separator
+			const mediaSeparator = stack.cards.find(c =>
+				c.card_type === 'separator' && c.name === 'Media',
+			)
+			expect(mediaSeparator).toBeUndefined()
+		})
+
+		test('media sources are configurable per-area', () => {
+			const configWithCustomSources = {
+				...dashboardConfig,
+				areas: {
+					...dashboardConfig.areas,
+					living_room: {
+						...dashboardConfig.areas.living_room,
+						media: {
+							platform: 'apple_tv',
+							remote_entity: 'remote.lr_apple_tv',
+							sources: [
+								{ name: 'Custom App', icon: 'mdi:apps', source: 'CustomApp' },
+							],
+						},
+					},
+				},
+			}
+
+			const areaData = prepareAllAreaData(minimalInventory, configWithCustomSources, generatorConfig)
+			const result = render(areaData, configWithCustomSources)
+
+			const cards = result.views[0].sections[0].cards
+			const lrPopup = cards.find(c => {
+				const stack = c.card || c
+				return stack.type === 'vertical-stack' &&
+					stack.cards?.some(card => card.hash === '#lr_details')
+			})
+
+			const stack = lrPopup.card || lrPopup
+
+			const mediaStack = stack.cards.find(c =>
+				c.type === 'vertical-stack' &&
+				c.cards?.some(card => card.card_type === 'sub-buttons'),
+			)
+
+			expect(mediaStack).toBeDefined()
+
+			// Find sub-buttons card with sources
+			const sourcesCard = mediaStack.cards.find(c =>
+				c.card_type === 'sub-buttons' &&
+				c.sub_button?.bottom?.some(b => b.name === 'Sources'),
+			)
+
+			expect(sourcesCard).toBeDefined()
+
+			const sourcesGroup = sourcesCard.sub_button.bottom.find(b => b.name === 'Sources')
+			expect(sourcesGroup.group).toHaveLength(1)
+			expect(sourcesGroup.group[0].name).toBe('Custom App')
+			expect(sourcesGroup.group[0].icon).toBe('mdi:apps')
+		})
+	})
 })
 
 describe('shared.js', () => {

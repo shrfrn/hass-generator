@@ -489,6 +489,54 @@ Defined under `areas.<area_id>` in shared or dashboard-specific config:
 | `included_scenes` | `string[]` | Scene entity IDs from other areas to show in this area's view. |
 | `excluded_scenes` | `string[]` | Scene entity IDs to hide from this area (show in another area instead). |
 | `visible_to_users` | `string[]` | HA user IDs that can see this area. Omit to show to all users. |
+| `media` | `MediaConfig` | Media/TV control configuration. See below. |
+
+#### Media Configuration
+
+Configure TV remote controls for areas with media players. A Media section will appear in the dashboard when:
+1. A `media_player` entity ending with `_tv` exists in the area
+2. `media.remote_entity` is configured for that area
+
+**MediaConfig Properties:**
+
+| Property | Type | Required | Description |
+|----------|------|----------|-------------|
+| `platform` | `'apple_tv'` \| `'android_tv'` | Yes | Platform type - determines remote behavior and popup hash. |
+| `remote_entity` | `string` | Yes | Remote entity ID (e.g., `'remote.slvn'`). |
+| `sources` | `MediaSource[]` | No | Source buttons. Defaults provided if omitted. |
+
+**MediaSource Properties:**
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `name` | `string` | Display name for the source button. |
+| `icon` | `string` | MDI icon (e.g., `'mdi:netflix'`). |
+| `source` | `string` | Source name as recognized by `media_player.select_source`. |
+
+**Default Sources (when not configured):**
+
+- Netflix (`mdi:netflix`, source: `"Netflix"`)
+- YouTube (`mdi:youtube`, source: `"YouTube"`)
+- Apple TV (`mdi:apple`, source: `"TV"`)
+
+**Example:**
+
+```javascript
+areas: {
+  living_room: {
+    media: {
+      platform: 'apple_tv',
+      remote_entity: 'remote.slvn',
+      sources: [
+        { name: 'Netflix', icon: 'mdi:netflix', source: 'Netflix' },
+        { name: 'YouTube', icon: 'mdi:youtube', source: 'YouTube' },
+        { name: 'Apple TV', icon: 'mdi:apple', source: 'TV' },
+        { name: 'Plex', icon: 'mdi:plex', source: 'Plex' },
+      ],
+    },
+  },
+}
+```
 
 ### Template-Specific Options
 

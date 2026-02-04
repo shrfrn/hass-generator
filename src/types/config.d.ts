@@ -171,6 +171,41 @@ export interface GeneratorConfig {
   areas?: Record<string, AreaConfig>
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// MEDIA/TV CONTROL TYPES
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Supported media platforms */
+export type MediaPlatform = 'apple_tv' | 'android_tv'
+
+/** Media source button configuration */
+export interface MediaSource {
+	/** Display name */
+	name: string
+
+	/** MDI icon (e.g., 'mdi:netflix') */
+	icon: string
+
+	/** Source name as recognized by media_player.select_source */
+	source: string
+}
+
+/** Media/TV control configuration for an area */
+export interface MediaConfig {
+	/** Platform type - determines remote behavior and popup hash */
+	platform: MediaPlatform
+
+	/** Remote entity ID (e.g., 'remote.slvn') */
+	remote_entity: string
+
+	/** Optional source buttons - defaults provided if omitted */
+	sources?: MediaSource[]
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DASHBOARD AREA CONFIG
+// ─────────────────────────────────────────────────────────────────────────────
+
 export interface DashboardAreaConfig {
   /** Lights to exclude from the Lights section */
   excluded_lights?: string[]
@@ -186,6 +221,9 @@ export interface DashboardAreaConfig {
 
   /** User IDs that can see this area */
   visible_to_users?: string[]
+
+  /** Media/TV control configuration */
+  media?: MediaConfig
 }
 
 /** Available dashboard templates */

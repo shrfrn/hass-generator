@@ -19,6 +19,10 @@ export default {
 			excluded_lights: ['light.lr_outdoor'],
 			included_lights: ['switch.lr_soc_e'],
 			excluded_scenes: ['scene.lr_movie_mode'],
+			media: {
+				platform: 'apple_tv',
+				remote_entity: 'remote.lr_apple_tv',
+			},
 		},
 
 		kitchen: {
