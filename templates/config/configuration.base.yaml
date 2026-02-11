@@ -28,7 +28,7 @@ homeassistant:
   packages: !include packages/index.yaml
 
 lovelace:
-  mode: yaml
+  resource_mode: yaml
   resources:
     - url: /hacsfiles/Bubble-Card/bubble-card.js
       type: module
