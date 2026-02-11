@@ -1,0 +1,5 @@
+---
+alwaysApply: true
+---
+
+When adding code which relies on a new custom card, make sure to update hass-generator/templates/config/configuration.base.yaml and hass-config/configuration.base.yaml to include the new custom card resources
