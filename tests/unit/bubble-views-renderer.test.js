@@ -45,5 +45,35 @@ describe('bubble-views/renderer.js', () => {
 			expect(closeButton.tap_action?.action).toBe('navigate')
 			expect(closeButton.tap_action?.navigation_path).toBe('/views/living-room')
 		})
+
+		test('media button Volume and Play/Pause sub-buttons use visibility with entity (not entity_id)', () => {
+			const config = { ...dashboardConfig, dashboard_path: 'views' }
+			const areaData = prepareAllAreaData(minimalInventory, config, generatorConfig)
+			const result = render(areaData, config)
+
+			const livingRoomView = result.views.find(v => v.path === 'living-room')
+			const cards = livingRoomView.sections[0].cards
+			const mediaButtonCard = cards.find(c => {
+				const card = c.card ?? c
+				if (card.type !== 'custom:bubble-card' || card.card_type !== 'button') return false
+				const main = card.sub_button?.main
+				return Array.isArray(main) && main.some(b => b.name === 'Volume') && main.some(b => b.name === 'Play / Pause')
+			})
+			expect(mediaButtonCard).toBeDefined()
+
+			const card = mediaButtonCard.card ?? mediaButtonCard
+			expect(card.entity).toBe('media_player.lr_tv')
+
+			const volumeBtn = card.sub_button.main.find(b => b.name === 'Volume')
+			const playPauseBtn = card.sub_button.main.find(b => b.name === 'Play / Pause')
+
+			expect(volumeBtn.visibility).toBeDefined()
+			expect(volumeBtn.visibility[0].entity).toBe('media_player.lr_tv')
+			expect(volumeBtn.visibility[0].entity_id).toBeUndefined()
+
+			expect(playPauseBtn.visibility).toBeDefined()
+			expect(playPauseBtn.visibility[0].entity).toBe('media_player.lr_tv')
+			expect(playPauseBtn.visibility[0].entity_id).toBeUndefined()
+		})
 	})
 })

@@ -512,7 +512,7 @@ function createMediaButtonCard(mediaPlayerEntity, remote_entity, popupHash) {
 		type: 'custom:bubble-card',
 		card_type: 'button',
 		button_type: 'switch',
-		entity: remote_entity,
+		entity: mediaPlayerEntity,
 		icon: 'mdi:remote-tv',
 		button_action: { tap_action: navAction },
 		tap_action: navAction,
@@ -534,13 +534,8 @@ function createVolumeSubButton(mediaPlayerEntity) {
 		icon: 'mdi:volume-high',
 		name: 'Volume',
 		entity: mediaPlayerEntity,
-		tap_action: {
-			action: 'perform-action',
-			perform_action: 'media_player.volume_mute',
-			target: {},
-			data: { is_volume_muted: false },
-		},
-		visibility: [{ condition: 'state', entity_id: mediaPlayerEntity, state: MEDIA_PLAYER_ACTIVE_STATES }],
+		tap_action: { action: 'more-info', entity: mediaPlayerEntity },
+		visibility: [{ condition: 'state', entity: mediaPlayerEntity, state: MEDIA_PLAYER_ACTIVE_STATES }],
 	}
 }
 
@@ -552,7 +547,7 @@ function createPlayPauseSubButton(mediaPlayerEntity, remote_entity) {
 		fill_width: false,
 		name: 'Play / Pause',
 		tap_action: createRemoteCommand(remote_entity, 'play_pause'),
-		visibility: [{ condition: 'state', entity_id: mediaPlayerEntity, state: MEDIA_PLAYER_ACTIVE_STATES }],
+		visibility: [{ condition: 'state', entity: mediaPlayerEntity, state: MEDIA_PLAYER_ACTIVE_STATES }],
 	}
 }
 
