@@ -157,7 +157,7 @@ function buildDetailsPopup({ areaData, defaultSceneSuffix, t }) {
 	const mediaConfig = areaConfig?.media
 	if (mediaPlayerEntity && mediaConfig?.remote_entity) {
 		cards.push(buildSeparator(t.ui('section.media')))
-		cards.push(buildMediaCard(mediaPlayerEntity, mediaConfig, prefix, t))
+		cards.push(buildMediaCard(mediaPlayerEntity, mediaConfig, prefix))
 	}
 
 	if (otherEntities.length > 0) {
@@ -350,7 +350,43 @@ const PLATFORM_POPUP_HASH = {
 	android_tv: 'atv_remote',
 }
 
-function buildMediaCard(mediaPlayerEntity, mediaConfig, prefix, t) {
+const REMOTE_BOTTOM_BUTTONS_STYLES = `
+	.bubble-sub-button-container,
+	.bubble-sub-button-bottom-container {
+		min-height: 72px;
+		padding: 10px 0;
+	}
+	.bubble-sub-button {
+		--bubble-sub-button-height: 64px;
+		min-width: 64px;
+		width: 64px;
+		height: 64px;
+		padding: 16px;
+		border-radius: 50%;
+		box-sizing: border-box;
+	}
+	.bubble-sub-button .show-icon,
+	.bubble-sub-button .icon-without-state {
+		--mdc-icon-size: 28px;
+	}
+`
+
+const TOUCHPAD_CARD_STYLES = `
+	ha-card {
+		padding: 0;
+		border: none;
+		box-shadow: none;
+	}
+	#touchpad::part(toucharea) {
+		background: var(--secondary-background-color);
+		min-height: 250px;
+		min-height: clamp(250px, 105vw, 400px);
+		height: 250px;
+		height: clamp(250px, 105vw, 400px);
+	}
+`
+
+function buildMediaCard(mediaPlayerEntity, mediaConfig, prefix) {
 	const { platform, remote_entity, sources = DEFAULT_MEDIA_SOURCES } = mediaConfig
 	const popupHashSuffix = PLATFORM_POPUP_HASH[platform] || PLATFORM_POPUP_HASH.apple_tv
 	const popupHash = `#${prefix}${popupHashSuffix}`
@@ -507,6 +543,7 @@ function buildMediaCard(mediaPlayerEntity, mediaConfig, prefix, t) {
 		remote_id: remote_entity,
 		media_player_id: mediaPlayerEntity,
 		autofill_entity_id: true,
+		styles: TOUCHPAD_CARD_STYLES,
 	})
 
 	// Skip buttons
@@ -515,6 +552,7 @@ function buildMediaCard(mediaPlayerEntity, mediaConfig, prefix, t) {
 		card_type: 'sub-buttons',
 		rows: 0.938,
 		hide_main_background: true,
+		styles: REMOTE_BOTTOM_BUTTONS_STYLES,
 		sub_button: {
 			main: [],
 			bottom: [
@@ -564,6 +602,7 @@ function buildMediaCard(mediaPlayerEntity, mediaConfig, prefix, t) {
 		footer_mode: true,
 		footer_full_width: true,
 		footer_bottom_offset: '30',
+		styles: REMOTE_BOTTOM_BUTTONS_STYLES,
 		sub_button: {
 			main: [],
 			bottom: [

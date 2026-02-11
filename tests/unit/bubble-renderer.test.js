@@ -351,6 +351,11 @@ describe('bubble/renderer.js', () => {
 			expect(touchpadCard.platform).toBe('Apple TV')
 			expect(touchpadCard.remote_id).toBe('remote.lr_apple_tv')
 			expect(touchpadCard.media_player_id).toBe('media_player.lr_tv')
+			expect(touchpadCard.styles).toBeDefined()
+			expect(touchpadCard.styles).toContain('ha-card')
+			expect(touchpadCard.styles).toContain('#touchpad::part(toucharea)')
+			expect(touchpadCard.styles).toMatch(/clamp\(250px,\s*10\d?vw,\s*400px\)/)
+			expect(touchpadCard.styles).toContain('var(--secondary-background-color)')
 		})
 
 		test('area without media config has no media section', () => {

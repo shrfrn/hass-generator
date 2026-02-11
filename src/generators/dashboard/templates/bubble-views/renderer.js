@@ -627,6 +627,42 @@ function createSourcesCard(mediaPlayerEntity, remote_entity, sources, dashboardP
 	}
 }
 
+const REMOTE_BOTTOM_BUTTONS_STYLES = `
+	.bubble-sub-button-container,
+	.bubble-sub-button-bottom-container {
+		min-height: 72px;
+		padding: 10px 0;
+	}
+	.bubble-sub-button {
+		--bubble-sub-button-height: 64px;
+		min-width: 64px;
+		width: 64px;
+		height: 64px;
+		padding: 16px;
+		border-radius: 50%;
+		box-sizing: border-box;
+	}
+	.bubble-sub-button .show-icon,
+	.bubble-sub-button .icon-without-state {
+		--mdc-icon-size: 28px;
+	}
+`
+
+const TOUCHPAD_CARD_STYLES = `
+	ha-card {
+		padding: 0;
+		border: none;
+		box-shadow: none;
+	}
+	#touchpad::part(toucharea) {
+		background: var(--secondary-background-color);
+		min-height: 250px;
+		min-height: clamp(250px, 100vw, 400px);
+		height: 250px;
+		height: clamp(250px, 100vw, 400px);
+	}
+`
+
 function createTouchpadCard(mediaPlayerEntity, remote_entity) {
 	return {
 		type: 'custom:universal-remote-card',
@@ -636,6 +672,7 @@ function createTouchpadCard(mediaPlayerEntity, remote_entity) {
 		remote_id: remote_entity,
 		media_player_id: mediaPlayerEntity,
 		autofill_entity_id: true,
+		styles: TOUCHPAD_CARD_STYLES,
 	}
 }
 
@@ -645,6 +682,7 @@ function createSkipButtonsCard(remote_entity) {
 		card_type: 'sub-buttons',
 		rows: 0.938,
 		hide_main_background: true,
+		styles: REMOTE_BOTTOM_BUTTONS_STYLES,
 		sub_button: {
 			main: [],
 			bottom: [
@@ -679,6 +717,7 @@ function createNavigationButtonsCard(remote_entity) {
 		footer_mode: true,
 		footer_full_width: true,
 		footer_bottom_offset: '30',
+		styles: REMOTE_BOTTOM_BUTTONS_STYLES,
 		sub_button: {
 			main: [],
 			bottom: [
