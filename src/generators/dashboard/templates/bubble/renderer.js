@@ -666,7 +666,6 @@ function buildMediaCard(mediaPlayerEntity, mediaConfig, prefix) {
 			],
 		},
 	})
-
 	return {
 		type: 'vertical-stack',
 		cards,
